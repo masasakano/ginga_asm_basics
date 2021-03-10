@@ -14,7 +14,7 @@ module unittest
   end interface assert_equal
 
   interface assert_in_delta	! Handle functions regardless of Types.
-    module procedure assert_in_deltarr, assert_in_deltadd
+    module procedure assert_in_deltarr, assert_in_deltaddr, assert_in_deltadd
   end interface assert_in_delta
 
   interface assert_smaller_than	! Handle functions regardless of Types.
@@ -358,6 +358,16 @@ contains
     !write(msg, prefix_fmt_test_fail//'es16.9, " != ", es16.9)') trim(subname), exq, act
     !call write_msg_optmsg(msg, optmsg)
   end function assert_in_deltarr
+
+  logical function assert_in_deltaddr(exq, act, delta, subname, optmsg) result(succeed)
+    real(dp), intent(in) :: exq, act
+    real(kind=4), intent(in) :: delta
+    character(len=*), intent(in) :: subname
+    character(len=*), intent(in), optional :: optmsg
+    character(len=1024) :: msg
+
+    succeed = assert_in_deltadd(exq, act, real(delta, kind=dp), subname, optmsg)
+  end function assert_in_deltaddr
 
   logical function assert_in_deltadd(exq, act, delta, subname, optmsg) result(succeed)
     real(dp), intent(in) :: exq, act, delta

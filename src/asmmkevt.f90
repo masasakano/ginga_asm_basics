@@ -152,7 +152,7 @@ program asmmkevt
   call update_asm_sfrow_modes(trows, relrows)
 
   !call write_asm_fits(trim(DEF_FNAME_OUT), tfhead, trows, frfrows, relrows, status)
-  call write_asm_evt_fits(outfil, tfhead, trows, frfrows, relrows, status)
+  call write_asm_evt_fits(outfil, tfhead, trows, relrows, status)
 
 if (.false.) then
 ! ******** write test fits **********

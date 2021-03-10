@@ -285,22 +285,25 @@ contains
 !  irowf, size(frows),irowt,size(trows) !DEBUG
       if (irowf < 0) then  ! No matching with FRF is found
         !!! Comment: FRF may (or actually does) not match for the telemetry rows for the ASM-mode data
-         retrows(irowr)%is_valid = .false.
-         retrows(irowr)%reason_invalid = get_reason_invalid('no_frf') ! defined in asm_fits_common
-        !retrows(irowr)%irowf = -1
-        !retrows(irowr)%sfn   = -1
-        !retrows(irowr)%lostf = -1
+        !retrows(irowr)%is_valid = .false.
+        !retrows(irowr)%reason_invalid = get_reason_invalid('no_frf') ! defined in asm_fits_common
+        retrows(irowr)%with_frf = .false. ! Same as Default
+        retrows(irowr)%irowf = -1
+        retrows(irowr)%frf%sfn   = -1
+        retrows(irowr)%frf%lostf = -1
         cycle
       end if
 
 !print *,'DEBUG:398: matching found: irowr=',irowr,' irowt=',irowt,' irowf=',irowf
+      retrows(irowr)%with_frf = .true.
       retrows(irowr)%irowf = irowf
-      retrows(irowr)%sfn   = frows(irowf)%sfn
-      retrows(irowr)%lostf = frows(irowf)%lostf
+      retrows(irowr)%frf = frows(irowf)
+      !retrows(irowr)%sfn   = frows(irowf)%sfn
+      !retrows(irowr)%lostf = frows(irowf)%lostf
 
-      if (retrows(irowr)%lostf > 0) then  ! Some frames are lost due to SYNC
+      if (retrows(irowr)%frf%lostf > 0) then  ! Some frames are lost due to SYNC
         retrows(irowr)%is_valid = .false.
-        retrows(irowr)%reason_invalid = get_reason_invalid('lostf', retrows(irowr)%lostf) ! defined in asm_fits_common
+        retrows(irowr)%reason_invalid = get_reason_invalid('lostf', retrows(irowr)%frf%lostf) ! defined in asm_fits_common
         !write(retrows(irowr)%reason_invalid, '("lostf=", I2, " (FRF) > 0")') retrows(irowr)%lostf
         cycle
       end if
@@ -353,7 +356,8 @@ contains
 
     integer :: iget
 
-    if (.not. sfrow%is_valid) return  ! SF does not exist in FRF
+    !!! This line is commented out; it continues even when there is no matching SF in FRF.
+    ! if (.not. sfrow%is_valid) return  ! SF does not exist in FRF
 
     ! MODE_ASM
     sfrow%mode_asm  = get_val_frb(TELEM_LOC%MODE_ASM,  trows, sfrow) ! F8n+4 W66(=DP) B3: ASM Mode (ON/OFF <=> 1/0)
@@ -381,7 +385,8 @@ contains
     ! STAT_BDR
     sfrow%stat_bdr_b = get_val_frb(TELEM_LOC%STAT_BDR,  trows, sfrow) ! (int) ENA/DIS for ASM-BDR F15W65B7
 
-    !integer(ip4) :: bitrate  = -99; ! [/s] Telemetry bit rate (F16W66) ! Taken from Telemetry as opposed to FRF
+    ! BITRATE
+    sfrow%bitrate    = get_val_frb(TELEM_LOC%BITRATE,   trows, sfrow) ! (int) Telemetry bit rate (F16W66)
   end subroutine update_asm_sfrow_mode_one
 
   ! Validate asm_sfrow, checking ASM mode etc.
@@ -396,9 +401,9 @@ contains
 
 !print *, 'DEBUG:142: start does_validate'
     ! lostf  ! (should be already flagged... just in case)
-    if (sfrow%lostf > 0) then
+    if ((sfrow%with_frf) .and. (sfrow%frf%lostf > 0)) then
       sfrow%is_valid = .false.
-      sfrow%reason_invalid = get_reason_invalid('lostf', sfrow%lostf) ! defined in asm_fits_common
+      sfrow%reason_invalid = get_reason_invalid('lostf', sfrow%frf%lostf) ! defined in asm_fits_common
       return
     end if
 
@@ -412,6 +417,18 @@ contains
       return
     end if
 
+    if (sfrow%stat_asm_b .ne. 1) then
+      ! ASM is off.
+      sfrow%is_valid = .false.
+      sfrow%reason_invalid = get_reason_invalid('asmswoff') ! defined in asm_fits_common
+    end if
+
+    if (sfrow%mode_asm .ne. 1) then
+      ! NOT in the ASM Mode.
+      sfrow%is_valid = .false.
+      sfrow%reason_invalid = get_reason_invalid('asmmodeoff') ! defined in asm_fits_common
+    end if
+
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     !if (sfrow%stat_asm_b .ne. sfrow%mode_asm) then
     !  sfrow%is_valid = .false.
@@ -419,17 +436,15 @@ contains
     !  write(stderr,'(A,I4,A,I4,A,I4,A)') 'WARNING: (SF=', sfrow%sfn, ') MODE_ASM (=', sfrow%mode_asm &
     !     , ') (F4 DP B3) differs from STAT_ASM (=', sfrow%stat_asm_b, '="'//get_onoff_enadis(sfrow%stat_asm_b, 'asm')//'")'
     !end if
-
-    if (sfrow%stat_asm_b .ne. 1) then
-      ! ASM is off.
-      sfrow%is_valid = .false.
-      sfrow%reason_invalid = get_reason_invalid('asmoff') ! defined in asm_fits_common
-    end if
   end subroutine validate_asm_sfrow_mode_one
 
-  ! Get the first value (n=0) of the specified Frame, Word, and maybe Byte
+  ! Get the first value (n=0 in FXn+Y) of the specified Frame, Word, and maybe Byte
   !
   ! sfrow%invalid flag in the sfrow may be set.
+  !
+  ! Example: 
+  !   For "F8n+1, W23", returns the value (0..255) of F1W23.
+  !   For "F8n+4, W0, B0", returns 1 or 0 of F4W0B0.
   !
   integer function get_val_frb(loc_fwb, trows, sfrow) result(kval)  ! fwb: frame, word, bit
     type(t_loc_fwb), intent(in) :: loc_fwb
@@ -446,14 +461,20 @@ contains
     irow = get_telem_row_index_from_fr( frn=loc_fwb%f_offset &  ! defined in asm_fits_common
        , trows=trows, istart=sfrow%irowt, nrows=sfrow%nframes)
     if (irow < 0) then
-      write(stderr,'(A, I2, A, I5, A, I5, A, I2, A)') 'WARNING: Frame (', loc_fwb%f_offset &
-         , ') does not exist in SF=(', sfrow%sfn &
+      if (sfrow%with_frf) then
+        write(stderr,'(A, I2, A, I5, A, I5, A, I2, A)') 'WARNING: Frame (', loc_fwb%f_offset &
+         , ') does not exist in SF=(', sfrow%frf%sfn &
          , ') with the starting Row_Telemetry=(', sfrow%irowt &
-         , '), which should not happen.  lostf=(', sfrow%lostf, ').'
+         , '), which should not happen.  lostf=(', sfrow%frf%lostf, ').'
+      else
+        write(stderr,'(A, I2, A, I5, A, I5, A, I2, A)') 'WARNING: Frame (', loc_fwb%f_offset &
+           , ') does not exist in a SF with the starting Row_Telemetry=(', sfrow%irowt &
+           , '), which should not happen.  nframes=(', sfrow%nframes, ').'
+      end if
       return
     else if (size(trows) < irow) then
-      write(stderr,'(A)') 'Contact the code developer.'
-      call EXIT(1)  ! for gfortran, Lahey Fujitsu Fortran 95, etc
+      call err_exit_play_safe() ! defined in err_exit
+      return ! redundant
     end if
 
     if (       TELEM_LOC%STAT_OBS%word == loc_fwb%word) then ! Status
@@ -469,7 +490,7 @@ contains
 
     if (kval < 0) then
       write(stderr,'(A, I2, A, I5, A, I5, A)') 'WARNING: '//trim(title)//' is not defined in Frame (' &
-         , loc_fwb%f_offset, ') in SF=(', sfrow%sfn, ') in Row_Telemetry=(', irow, ').'
+         , loc_fwb%f_offset, ') in SF=(', sfrow%frf%sfn, ') in Row_Telemetry=(', irow, ').'
       return
     end if
 
@@ -557,11 +578,11 @@ print *,'DEBUG:042:b3ftart-out, status=',status
 
 
   ! Output FITS file of the ASM data
-  subroutine write_cols(unit, trows, frfrows, relrows, colheads, status)
+  subroutine write_cols(unit, trows, relrows, colheads, status)
     implicit none
     integer, intent(in) :: unit
     type(asm_telem_row), dimension(:), intent(in) :: trows
-    type(asm_frfrow), dimension(:), intent(in) :: frfrows
+    !type(asm_frfrow), dimension(:), intent(in) :: frfrows
     type(asm_sfrow), dimension(:), intent(in) :: relrows
     type(t_asm_colhead), dimension(:), allocatable, intent(in) :: colheads
     integer, intent(out) :: status
@@ -628,11 +649,13 @@ do ikind=2, 4  ! Index in COL_FORM_UNITS
                  iend, naxis2, irelrow, nrelrows
               call EXIT(1)
             end if
-            !cold(iout:iend) = frfrows(relrows(irelrow)%irowf)%eulers(iprm, 1)
-            cold(iout:iend) = frfrows(relrows(irelrow)%irowf)%eulers(iprm,1)  ! Same value for the entire SF
+            ! cold(iout:iend) = frfrows(relrows(irelrow)%irowf)%eulers(iprm,1)  ! Same value for the entire SF
+            cold(iout:iend) = relrows(irelrow)%frf%eulers(iprm,1)  ! Same value for the entire SF
 if ((irelrow > 2) .and. (irelrow < 5)) then
+ !print *,'DEBUG:429:iprm=',iprm,' irelrow=',irelrow,' irowf=',relrows(irelrow)%irowf,' iout=', iout, ' eulers=', &
+    !frfrows(relrows(irelrow)%irowf)%eulers(:,1), ' This=',frfrows(relrows(irelrow)%irowf)%eulers(iprm,1),  &
   print *,'DEBUG:429:iprm=',iprm,' irelrow=',irelrow,' irowf=',relrows(irelrow)%irowf,' iout=', iout, ' eulers=', &
-     frfrows(relrows(irelrow)%irowf)%eulers(:,1), ' This=',frfrows(relrows(irelrow)%irowf)%eulers(iprm,1),  &
+     relrows(irelrow)%frf%eulers(:,1), ' This=',relrows(irelrow)%frf%eulers(iprm,1),  &
      ' cold=',cold(iout)
 end if
           end do
@@ -647,7 +670,6 @@ end if
 
           print *,'DEBUG:334:euler',iprm,'=',cold(63:65)
         end do
-call dump_type(frfrows(5))
 !print *,'DEBUG:332:irowf(2)=',relrows(2)%irowf
 
       case('SFNum')   
@@ -665,7 +687,7 @@ call dump_type(frfrows(5))
               call EXIT(1)
             end if
             !colj(iout:iend) = frfrows(relrows(irelrow)%irowf)%eulers(iprm, 1)
-            colj(iout:iend) = relrows(irelrow)%sfn
+            colj(iout:iend) = relrows(irelrow)%frf%sfn
           end do
           ittype = ittype + 1  ! FITS Table column number
           call FTPCLJ(unit, ittype, 1, 1, naxis2, colj, status)  ! colnum = 1
@@ -674,6 +696,8 @@ call dump_type(frfrows(5))
             write(stderr,'("ERROR: (sfn) Failed in FTPCLJ() with status=", I12,": ",A)') status, trim(errtext)
           end if
           call modify_ttype_comment(unit, ittype, ckey, status)
+          ! call FTSNUL(unit,colnum,snull > status) ! Define string representation for NULL column
+          ! call FTTNUL(unit,colnum,tnull > status) ! Define the integer(!) value to be treated as NULL
 
 print *,'DEBUG:364:sfn',iprm,'=',colj(63:65)
         end do
@@ -696,7 +720,7 @@ call dump_type(relrows(5))
   end subroutine write_cols
 
   ! Output FITS file of the ASM data
-  subroutine write_asm_evt_fits(outfil, fhead, trows, frfrows, relrows, status)
+  subroutine write_asm_evt_fits(outfil, fhead, trows, relrows, status)
     implicit none
     integer, parameter :: MY_FUNIT = 159  ! arbitrary
     character(len=*), parameter :: extname = 'ASM table'
@@ -704,7 +728,7 @@ call dump_type(relrows(5))
     character(len=*), intent(in) :: outfil
     type(fits_header), intent(in) :: fhead  ! Mainly for 1st-Extension header
     type(asm_telem_row), dimension(:), intent(in) :: trows
-    type(asm_frfrow), dimension(:), intent(in) :: frfrows
+    !type(asm_frfrow), dimension(:), intent(in) :: frfrows
     type(asm_sfrow), dimension(:), intent(in) :: relrows
     integer, intent(out) :: status
 
@@ -789,7 +813,7 @@ call FTGERR(status, errtext)
 print *,'test-new-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
 call ftpkys(unit,'MY_HEAD','Arbitrary','My comment 01',status)
     
-    call write_cols(unit, trows, frfrows, relrows, colheads, status)  !!!!!!!!!!!!!!!
+    call write_cols(unit, trows, relrows, colheads, status)  !!!!!!!!!!!!!!!
 
 !    ! Write Table (double precision)
 !    !FTPCL[SLBIJKEDCM](unit,colnum,frow,felem,nelements,values, > status) ! frow: 1st row?, felem: 1st element?

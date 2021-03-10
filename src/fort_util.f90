@@ -4,6 +4,10 @@ module fort_util
   use iso_fortran_env, only : stderr=>ERROR_UNIT
   implicit none 
 
+  real(kind=8), parameter, public :: PI = atan(1.0d0)*4
+  !          == 3.141592653589793116 (in REAL64)
+  ! True value: 3.1415926535897932384626433832795028841971693993751...
+
   ! Convert a (Scalar/Array) Integer*1 as a byte (namely unsigned) into the (default) Integer*4
   !
   ! DESCRIPTION:
@@ -30,9 +34,30 @@ module fort_util
   end interface btest_int4_as_1byte
 contains
 
+  ! Radian to degree
+  real(kind=8) function rad2deg(rad)
+    real(kind=8), intent(in) :: rad
+
+    !PI = 3.141592653589793238462643383279
+    !PI = 3.141592653589793238462643383279502884197169399375105820974944592307816406286 
+    rad2deg = rad * 180.0d0/PI
+  end function rad2deg
+
+  ! Radian to degree
+  real(kind=8) function deg2rad(deg)
+    real(kind=8), intent(in) :: deg
+
+    !PI = 3.141592653589793238462643383279
+    !PI = 3.141592653589793238462643383279502884197169399375105820974944592307816406286 
+    deg2rad = deg * PI/180.0d0
+  end function deg2rad
+
   ! Returns a character of left-adjusted integer (with prefix if specified)
   !
   ! if len_trim(prefix) is too long, the returned character is an error message!
+  !
+  ! TODO: This should be a subroutine, using intent(inout), so the character length
+  !       would be taken care of by the caller.
   function ladjusted_int(i, prefix) result(retchar)
     integer, parameter :: Len_max_int = 20  ! Maximum length of chars required for Integer*64
       ! NOTE: if you change this value, make sure to change the value in write() in the code below.

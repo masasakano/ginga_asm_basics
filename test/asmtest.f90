@@ -78,7 +78,7 @@ contains
   ! Returns 1 if error is raised (0 otherwise)
   integer function run_test_fort_util() result(ret_status)
     character(*), parameter :: subname = 'run_test_fort_util'
-    integer,      parameter :: TOT_NTESTS = 26
+    integer,      parameter :: TOT_NTESTS = 28
     logical, dimension(TOT_NTESTS) :: ress
     ! logical, external :: btest_int4_as_1byte
 
@@ -119,6 +119,8 @@ contains
       , assert_equal(0, btest2int_int4_as_1byte(254, 7), subname, ' Int for (254,7)=') & ! FALSE (b11111110)
       , assert_equal('c.d', trim(basename('/a/b/c.d')),  subname, ' basename(/a/b/c.d)') &
       , assert_equal('c.d', trim(basename('c.d')),       subname, ' basename(/a/b/c.d)') &
+      , assert_in_delta(180.0d0, rad2deg(PI), 1.0e5, subname, ' rad2deg(PI)') &
+      , assert_in_delta(PI, deg2rad(180.0d0), 1.0e5, subname, ' deg2rad(PI)') &
       ]
 
     do j=1, TOT_NTESTS
@@ -536,20 +538,20 @@ call dump_asm_telem_row(telm_rows(SF2F15)) ! =79(F15) for DEBUG
     integer,      parameter :: TOT_NTESTS = 3  ! Number of tests
     logical, dimension(TOT_NTESTS) :: ress
 
-    type(asm_frfrow), dimension(:), allocatable :: sfrows
+    type(asm_frfrow), dimension(:), allocatable :: frfrows
     integer :: j
 
     ret_status = 0  ! normal ends (n.b., returned value)
 
-    sfrows = get_frf_types(DEF_FNAME_FRF)
-    !print *, 'DEBUG: size(sfrows)=', size(sfrows)
-    call dump_asm_frfrow(sfrows(1))
-    call dump_asm_frfrow(sfrows(2))
+    frfrows = get_frf_types(DEF_FNAME_FRF)
+    !print *, 'DEBUG: size(frfrows)=', size(frfrows)
+    call dump_asm_frfrow(frfrows(1))
+    call dump_asm_frfrow(frfrows(2))
 
     ress = [ &
-        assert_equal(  27,       sfrows(2)%stime(3),    subname, 'for STIME(DAY) for i=2') &
-      , assert_equal(   3,       sfrows(2)%sfn,         subname, 'for SFN for i=2') &
-      , assert_in_delta(3.23861_dp, sfrows(2)%eulers(1,1), 0.0001_dp, subname, 'for Euler1 for i=2') &
+        assert_equal(  27,       frfrows(2)%stime(3),    subname, 'for STIME(DAY) for i=2') &
+      , assert_equal(   3,       frfrows(2)%sfn,         subname, 'for SFN for i=2') &
+      , assert_in_delta(3.23861_dp, frfrows(2)%eulers(1,1), 0.0001_dp, subname, 'for Euler1 for i=2') &
       ]
 
     do j=1, TOT_NTESTS
@@ -573,17 +575,17 @@ call dump_asm_telem_row(telm_rows(SF2F15)) ! =79(F15) for DEBUG
     logical, dimension(TOT_NTESTS) :: ress
 
     type(fits_header) :: frfhead
-    type(asm_frfrow), dimension(:), allocatable :: sfrows
+    type(asm_frfrow), dimension(:), allocatable :: frfrows
     integer :: j
 
     ret_status = 0  ! normal ends (n.b., returned value)
 
-    call mk_frf_rows(DEF_FNAME_FRF, frfhead, sfrows)
+    call mk_frf_rows(DEF_FNAME_FRF, frfhead, frfrows)
 
     ress = [ &
-        assert_equal(  27,       sfrows(2)%stime(3),    subname, 'for STIME(DAY) for i=2') &
-      , assert_equal(   3,       sfrows(2)%sfn,         subname, 'for SFN for i=2') &
-      , assert_in_delta(3.23861_dp, sfrows(2)%eulers(1,1), 0.0001_dp, subname, 'for Euler1 for i=2') &
+        assert_equal(  27,       frfrows(2)%stime(3),    subname, 'for STIME(DAY) for i=2') &
+      , assert_equal(   3,       frfrows(2)%sfn,         subname, 'for SFN for i=2') &
+      , assert_in_delta(3.23861_dp, frfrows(2)%eulers(1,1), 0.0001_dp, subname, 'for Euler1 for i=2') &
       , assert_equal('GINGA_FRF', frfhead%EXTNAME%val,  subname, 'for EXTNAME') &
       , assert_equal(36048,       frfhead%NAXIS2%val,   subname, 'for NAXIS2') &
       , assert_equal(frfhead%TOTAL_SF%val, frfhead%TOTSFFRF%val, subname, 'for TOTAL_SF=TOTSFFRF') &
@@ -599,7 +601,7 @@ call dump_asm_telem_row(telm_rows(SF2F15)) ! =79(F15) for DEBUG
       return
     end do
     call print_teststats(subname, TOT_NTESTS)
-    deallocate(sfrows)
+    deallocate(frfrows)
   end function run_mk_frf_rows
 end module test_read_telemetry
 

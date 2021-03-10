@@ -234,17 +234,17 @@ module asm_fits_common
   ! NOTE: A byte must have been converted into Integer*4 with a proper filter
   type asm_frfrow
     !------- with SFCHCK() -----------
-    integer(kind=ip4), dimension(0:63) :: sync;    ! (0:63), 0=OK, 1=NG
-    integer(kind=ip4) :: lostf;   ! Number of frames with SYNG=NG
-    integer(kind=ip4) :: sfn;     ! SF Number (by SIRIUS)
-    integer(kind=ip4) :: bitrate; ! 0: high, 1: medium, 2: low
+    integer(kind=ip4), dimension(0:63) :: sync = -998;    ! (0:63), 0=OK, 1=NG
+    integer(kind=ip4) :: lostf = -998;   ! Number of frames with SYNG=NG
+    integer(kind=ip4) :: sfn = -998;     ! SF Number (by SIRIUS)
+    integer(kind=ip4) :: bitrate = -998; ! 0: high, 1: medium, 2: low
       ! NOTE: bit-rate-low(0) or high(1) in Byte12 of Telemetry-Header-16-bits.
       ! NOTE: Name is "bitrate" (with trailing 'e') as opposed to 'BITRAT' in FRFREAD manual.
       ! NOTE: 128(L)/32(M)/4(H) sec/SF (cf. Table 4.1.2, pp.187 in Ginga specification)
       !     :   2(L)/0.5(M)/0.0625(H) sec/Frame
-    integer(kind=ip4) :: relstr;  ! 0: real-data, 1: stored data
+    integer(kind=ip4) :: relstr = -998;  ! 0: real-data, 1: stored data
       ! NOTE: The flag is different in Byte11 of Telemetry-Header-16-bits: (real(1) or stored(2))
-    integer(kind=ip4), dimension(7) :: stime; ! Start time of SF in (Y,M,D,h,m,s,ms) in INTEGER
+    integer(kind=ip4), dimension(7) :: stime = -998; ! Start time of SF in (Y,M,D,h,m,s,ms) in INTEGER
 
     !------- with GETOAT() -----------
     ! NOTE: All but nsampl has an array of 1..4; it contains up to 4 data
@@ -265,26 +265,26 @@ module asm_fits_common
     !   of the bitrate and all the frames in a SF in the output FITS will have
     !   a common value with regard to any of the OAT.
     !
-    real(dp8), dimension(4) :: mjds ! MJD OF THE ORBIT AND ATTITUDE
-    real(dp8), dimension(17,4) :: rbuffs ! RBUFF(J,*)  *=1,NSAMPL ! for backup/debugging
+    real(dp8), dimension(4) :: mjds = -998 ! MJD OF THE ORBIT AND ATTITUDE
+    real(dp8), dimension(17,4) :: rbuffs = -998 ! RBUFF(J,*)  *=1,NSAMPL ! for backup/debugging
     !---- From here, Contents of RBUFF([1-17],*)
-    real(dp8), dimension(3, 4) :: eulers        ! [J=1-3] EURLER ANGLES  (Z-Y-Z)
-    real(dp8), dimension(3, 4) :: d_eulers      ! [J=4-6] DOT EURLER ANGLES
-    real(dp8), dimension(4) :: height     ! [J=7] HEIGHT
-    real(dp8), dimension(2, 4) :: lon_lat       ! [J=8-9] LONGITUDE, LATTITUDE
-    real(dp8), dimension(4) :: dist_earth ! [J=10] DISTANCE FROM THE EARTH CENTER                 
-    real(dp8), dimension(2, 4) :: coords_earth  ! [J=11-12] ALPHA,DELTA OF THE EARTH CENTER (1950 EQUINOX)
-    real(dp8), dimension(4) :: cor        ! [J=13] CUT OFF RIGIDITY
-    real(dp8), dimension(2, 4) :: coords_magnet ! [J=14-15] ALPHA,DELTA OF THE MAGNETIC FIELD
-    real(dp8), dimension(2, 4) :: coords_sun    ! [J=16-17] ALPHA,DELTA OF THE SUN
+    real(dp8), dimension(3, 4) :: eulers = -998        ! [J=1-3] EURLER ANGLES  (Z-Y-Z) [radian]
+    real(dp8), dimension(3, 4) :: d_eulers = -998      ! [J=4-6] DOT EURLER ANGLES [radian]
+    real(dp8), dimension(4) :: height = -998     ! [J=7] HEIGHT [km]
+    real(dp8), dimension(2, 4) :: lon_lat = -998       ! [J=8-9] LONGITUDE, LATTITUDE [deg]
+    real(dp8), dimension(4) :: dist_earth = -998 ! [J=10] DISTANCE FROM THE EARTH CENTER [km]
+    real(dp8), dimension(2, 4) :: coords_earth = -998  ! [J=11-12] ALPHA,DELTA OF THE EARTH CENTER (1950 EQUINOX) [deg]
+    real(dp8), dimension(4) :: cor = -998        ! [J=13] CUT OFF RIGIDITY [GeV/c]
+    real(dp8), dimension(2, 4) :: coords_magnet = -998 ! [J=14-15] ALPHA,DELTA OF THE MAGNETIC FIELD [deg]
+    real(dp8), dimension(2, 4) :: coords_sun = -998    ! [J=16-17] ALPHA,DELTA OF THE SUN [deg]
     !---- Up To here, Contents of RBUFF 
-    real(dp8), dimension(4) :: sunps  ! PRESENCE OF SUNSHINE, 1/0=YES/NO                        
-    real(dp8), dimension(4) :: elvys  ! ELEVATION OF YAXIS FROM THE EARTH EDGE                  
-    real(dp8), dimension(4) :: eflags ! CONDITION OF THE EARTH OCCULTATION                      
-                   ! 0: NOT OCCULTED, 1: OCCULTED BY THE DARK EARTH         
-                   ! 2: OCCULTED BY SUN SHONE EARTH                         
-    real(dp8) :: nsampl ! NUMBER OF THE ORBIT AND ATTITUDE DATA                  
-                       ! NSAMPL=1 FOR BITRATE H,M ,  =4 FOR BITRATE L           
+    real(dp8), dimension(4) :: sunps = -998  ! PRESENCE OF SUNSHINE, 1/0=YES/NO
+    real(dp8), dimension(4) :: elvys = -998  ! ELEVATION OF YAXIS FROM THE EARTH EDGE [deg]
+    real(dp8), dimension(4) :: eflags = -998 ! CONDITION OF THE EARTH OCCULTATION
+                   ! 0: NOT OCCULTED, 1: OCCULTED BY THE DARK EARTH
+                   ! 2: OCCULTED BY SUN SHONE EARTH
+    real(dp8) :: nsampl = -998 ! NUMBER OF THE ORBIT AND ATTITUDE DATA
+                       ! NSAMPL=1 FOR BITRATE H,M ,  =4 FOR BITRATE L
   end type asm_frfrow
 
   ! Invalid reason type
@@ -294,15 +294,17 @@ module asm_fits_common
     character(len=1024) :: fmt;
     integer             :: nargs = 0;  ! Number of Integer arguments required with the "fmt"
   end type t_invalid_fmt
-  type(t_invalid_fmt), dimension(4), parameter :: INVALID_FMT = [ &
+  type(t_invalid_fmt), dimension(5), parameter :: INVALID_FMT = [ &
        t_invalid_fmt(key='no_frf', desc='no matching with FRF found' &
                                 , fmt='("no matching with FRF found")', nargs=0) &
      , t_invalid_fmt(key='tel64',  desc='less than 64 Telemetry nFrames' &  ! NFRAMES_PER_SF = 64
                                 , fmt='("less than 64 Telemetry nFrames=",I2)', nargs=1) &
      , t_invalid_fmt(key='lostf',  desc='positive lostf(FRF)' &
                                 , fmt='("positive lostf(FRF)=",I2)', nargs=1) &
-     , t_invalid_fmt(key='asmoff', desc='ASM is off' &
-                                , fmt='("ASM is off")', nargs=0) &
+     , t_invalid_fmt(key='asmswoff', desc='ASM is switched off' &
+                                , fmt='("ASM is switched off")', nargs=0) &
+     , t_invalid_fmt(key='asmmodeoff', desc='ASM-mode is off' &
+                                , fmt='("ASM-mode is off")', nargs=0) &
      ]
 
   ! Invalid reason object to be used in asm_sfrow%reason_invalid
@@ -323,9 +325,11 @@ module asm_fits_common
     integer(ip4) :: irowt   = -999; ! i-th ROW of Telemetry that is the first one of this SF
     integer(ip4) :: sf2bits = -999; ! 2-bits SF in 16-byte Telemetry row header
     integer(ip4) :: nframes = -999; ! Number of FRAMES
-    integer(ip4) :: irowf   = -999; ! i-th ROW of FRF
-    integer(ip4) :: sfn     = -999; ! SF Number in FRF determined by SIRIUS
-    integer(ip4) :: lostf   = -999; ! number of LOST Frames (wrong "SYNC")
+    logical  :: with_frf = .false.; ! if True, %frf is valid.
+    integer(ip4) :: irowf   = -999; ! i-th ROW of the original FRF-Array; -1 shall be set when with_frf is determined to be .false.
+    type(asm_frfrow) :: frf = asm_frfrow(); ! -1 shall be (though not guaranteeed) set for %sfn and %lostf if with_frf is .false. 
+       !integer(ip4) :: sfn     = -999; ! SF Number in FRF determined by SIRIUS
+       !integer(ip4) :: lostf   = -999; ! number of LOST Frames (wrong "SYNC")
     integer(ip4) :: mode_asm  = -999; ! F8n+4 W66(=DP) B3: ASM Mode (ON/OFF <=> 1/0)
     integer(ip4) :: mode_slew = -999; ! F32n+10 W65(=Status) B3:  Slew369 Mode (is ON "1"? (unconfirmed)) ! Ref: Table 5.1.12, pp.209
     integer(ip4) :: mode_PHA  = -999; ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
@@ -792,7 +796,7 @@ contains
   ! Returns the object type(t_reason_invalid)
   !
   ! For the key, see the member 'key' of the parameter INVALID_FMT
-  ! e.g., (no_frf|tel64|lostf|asmoff)
+  ! e.g., (no_frf|tel64|lostf|asmswoff|asmmodeoff)
   function get_reason_invalid(key, i1, i2) result(tret)
     character(len=*), intent(in) :: key
     integer, intent(in), optional :: i1, i2
@@ -1010,6 +1014,14 @@ contains
     type(asm_sfrow), intent(in) :: row
     integer(ip4), intent(in), optional :: irow  ! Row-No in the internal variable. Just for displaying purpose.
 
+    character(len=16) :: s_lostf
+
+    if (row%with_frf) then
+      s_lostf = ladjusted_int(row%frf%lostf)
+    else
+      s_lostf = 'UNDEF('//trim(ladjusted_int(row%frf%lostf))//')'
+    end if
+
     if (present(irow)) then
       write(*,'(" --------- asm_sfrow(row=", I4, ") ---------")') irow
     else
@@ -1020,7 +1032,8 @@ contains
       write(*,'(" reason_invalid = ''", A, "''")') trim(row%reason_invalid%text)
     end if
     write(*,'(" irowt(irow_Telemetry)=",I6,", nFrames=",I5)') row%irowt, row%nframes
-    write(*,'(" irowf(irow_FRF)=",I6,", sfn(SF-No)=",I6,", lostf=",I4)') row%irowf, row%sfn, row%lostf
+    write(*,'(" with_frf=",L1," irowf(irow_FRF)=",I6,", sfn(SF-No)=",I6,", lostf=",A6)') &
+       row%with_frf, row%irowf, row%frf%sfn, trim(s_lostf)
     write(*,'(" mode_asm(1:ON)=",I4,", slew(1:ON)=",I4,", PHA(1:TIME)=",I4)') &
        row%mode_asm, row%mode_slew, row%mode_PHA
     write(*,'(" stat_asm(ON(1)/OFF)=''",A,"'', stat_hv1(ENA(1)/DIS)=''",A,"'', stat_rbm(ENA/DIS)=''",A,"''")') &
@@ -1548,8 +1561,8 @@ if (ittype > nsiz) call err_exit_play_safe()
     end do
     write(s,'("    ",I5,"=(Total) (for sanity-check <=> ",I5,")")') n_tot, n_discarded
     strs_stats(n_b4bd+SIZE_FMT+1) = s  ! Index: Last-1
-    write(s,'("Telemetry SFs without FRF counterparts (undefined sfn): ",I5," (for sanity-check)")') &
-       count(sfrows%sfn < 0)
+    write(s,'("Telemetry SFs without FRF counterparts vs undefined sfn: ",I5," <=> ",I5," (for sanity-check)")') &
+       count(.not. sfrows%with_frf), count(sfrows%frf%sfn < 0)
     strs_stats(n_b4bd+SIZE_FMT+2) = s  ! Index: Last
   end function calc_proc_stats
 
