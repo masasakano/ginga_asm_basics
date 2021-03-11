@@ -224,6 +224,7 @@ contains
     colheads2 = get_colheads(ChKeys)
 
     ress = [ &
+        !assert_equal(12, size(COL_FORM_UNITS), trim(subname), 'size(COL_FORM_UNITS)') &
         assert_equal(exq1, get_ncols_colheads(), trim(subname), 'get_ncols_colheads()') &
       , assert_equal(2,    get_ncols_colheads(COL_FORM_UNITS(4:5)), trim(subname), 'get_ncols_colheads(4:5)') &
       , assert_equal(5,    get_ncols_colheads(ChKeys), trim(subname), 'get_ncols_colheads(3-Chars)') &

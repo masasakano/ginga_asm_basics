@@ -1,0 +1,116 @@
+program asmtelemetryout
+
+  use iso_fortran_env, only : stderr=>ERROR_UNIT   
+
+  use err_exit
+  use fort_util
+  use asm_fits_common
+  use asm_aux
+  use asm_read_telemetry
+  use asm_fitsout
+
+  implicit none
+
+!integer, parameter :: dp = kind(1.d0) ! defined in asm_fits_common
+  integer :: Maxaxes, nbytepercard, nbyteforheader
+  parameter(Maxaxes = 2, nbytepercard = 144, nbyteforheader = 16 )
+  character(len=*), parameter :: Subname = 'main'
+
+  integer :: i, j, n_mainarg, istart_main
+
+  integer :: status=-999 !, hdutype, nframes, naxis1
+
+  type(fits_header) :: tfhead
+  integer(kind=1), dimension(:, :), allocatable :: headers, telems !  (word, row)
+  type(asm_telem_row), dimension(:), allocatable :: trows
+
+  type(fits_header) :: frfhead
+  type(asm_frfrow), dimension(:), allocatable :: frfrows
+  type(asm_sfrow), dimension(:), allocatable :: relrows
+  character(len=LEN_PROC_STATS), dimension(:), allocatable :: ar_strs_stats
+
+  character(len=1024) :: arg
+  type(t_argv), dimension(:), allocatable :: allargv
+  !type(t_argv), dimension(3) :: argv
+  !argv = [t_argv(key='telemetry'), t_argv(key='FRF'), t_argv(key='outfile')] 
+
+  !! USAGE: ./asmtelemetryout ../../../ginga_samples/ginga_sirius_P198804280220.fits ../../../ginga_samples/FR880428.S0220.fits ../../../ginga_samples/mkevt_out_test.fits
+
+  !-- Handle the command-line arguments.
+
+print *,'DEBUG:002: command_argument_count()=',command_argument_count()
+  allocate(allargv(command_argument_count()))  ! F2003 standard  (_excluding_ $0)
+print *,'DEBUG:003: size(allargv)=',size(allargv)
+  !allargv(2:4) = [t_argv(key='telemetry'), t_argv(key='FRF'), t_argv(key='outfile')]
+  !allargv(2) = t_argv(key='telemetry')
+  !allargv(3) = t_argv(key='FRF')
+  !allargv(4) = t_argv(key='outfile')
+
+  i = -1  ! i=0 is for $0 (index for all the original ARGV)
+  istart_main = -1  ! Index where the main arugment starts.
+  do
+    i = i+1
+    call get_command_argument(i, arg)
+    if (i == 0) cycle  ! i=0 is for $0
+    if (len_trim(arg) == 0) exit
+
+    if ((trim(arg) == '-h') .or. (trim(arg) == '--help')) then
+      print *, 'USAGE: asmtelemetryout [-h] Telemetry.fits FRF.fits out.fits KEY1 [Key2 [Key3 ...]]'
+      print *, ' Keys: Tstart|Euler|SFNum|SF2bits|Fr6bits|i_frame|Status_C|DP_C|ACS_C|AMS_C|Bitrate' &
+                   //'|ASM_Mode|Slew360|Time_PHA|F56W66B4|'
+      call EXIT(0)
+    end if
+    if (istart_main < 0) istart_main = i
+    j = i-istart_main+1
+    select case(j)
+    case(1)
+      allargv(j) = t_argv(key='telemetry', val=arg)
+    case(2)
+      allargv(j) = t_argv(key='FRF', val=arg)
+    case(3)
+      allargv(j) = t_argv(key='outfile', val=arg)
+    case default
+      allargv(j) = t_argv(key='key'//ladjusted_int(j-3), val=arg)
+    end select
+  end do
+
+  n_mainarg = size(allargv) - istart_main + 1
+  if (n_mainarg < 3) call err_exit_with_msg( &
+     'The number of the main argument must be at least 3, but given only '//trim(ladjusted_int(n_mainarg)))
+print *,'DEBUG:024: istart_main=',istart_main, ' n_mainarg=',n_mainarg
+call dump_all_argv(allargv) ! DEBUG
+
+  !---------------- MAIN ------------------
+    
+  ! Get telm_rows from the default data with add_mjd2telem(tfhead, telm_rows)
+  call read_telemetry(trim(get_val_from_key('telemetry', allargv)), tfhead, headers, telems) ! tfhead: Telemetry-Fits-HEADer
+  trows = get_telem_raws2types(headers, telems)
+  call add_mjd2telem(tfhead, trows)
+
+  ! Get the FRF
+  call mk_frf_rows(trim(get_val_from_key('FRF', allargv)), frfhead, frfrows)
+
+  !--- get ASM_sfrows (for relation)
+  relrows = get_asm_sfrow(trows, frfrows)
+  call update_asm_sfrow_modes(trows, relrows, skip_validate=.true.) ! skip_validate: Major difference from asmmkevt.f90
+
+  if (n_mainarg == 3) then
+    call write_asm_evt_fits(get_val_from_key('outfile', allargv), tfhead, trows, relrows, status)
+  else
+print *,'DEBUG:032: ' 
+call dump_all_argv(allargv(istart_main+3:)) ! DEBUG
+    call write_asm_evt_fits(get_val_from_key('outfile', allargv), tfhead, trows, relrows, status, allargv(istart_main+3:)%val)
+  end if
+
+    ar_strs_stats = calc_proc_stats(trows, relrows)  ! allocatable
+    write(*,'("----------- Processing Statistics -----------")')
+    do j=1, size(ar_strs_stats)
+      write(*,'(A)') trim(ar_strs_stats(j))
+    end do
+    write(*,'("---------------------------------------------")')
+    if (allocated(ar_strs_stats)) deallocate(ar_strs_stats)
+
+  if (allocated(allargv)) deallocate(allargv)
+end program asmtelemetryout
+
+

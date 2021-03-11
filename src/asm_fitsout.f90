@@ -601,16 +601,21 @@ print *,'DEBUG:042:b3ftart-out, status=',status
     allocate(colj(naxis2))
     allocate(cold(naxis2))
 
+print *,'DEBUG:2433'
+call dump_type(relrows(3), 3)
 !FTPCL[SLBIJKEDCM](unit,colnum,frow,felem,nelements,values, > status) ! frow: 1st row?, felem: 1st element?
 
     status = 0 
     iframe = 0 
     ittype = 0  ! TTYPEn
     ! do ikind=1, size(COL_FORM_UNITS)
-do ikind=2, 4  ! Index in COL_FORM_UNITS
+    do ikind=1, size(colheads)
+!do ikind=2, 4  ! Index in COL_FORM_UNITS
       iout = 0  ! Row number of each output Column
       iend = 0
-      ckey = COL_FORM_UNITS(ikind)%key
+!ckey = COL_FORM_UNITS(ikind)%key
+      ckey = colheads(ikind)%key 
+print *,'DEBUG:2010:ikind=',ikind, ' ckey=', trim(ckey)
       select case(trim(ckey))
       case('main')
       case('Tstart')
@@ -627,6 +632,7 @@ do ikind=2, 4  ! Index in COL_FORM_UNITS
           end do
         end do
         ittype = ittype + 1  ! FITS Table column number
+print *,'DEBUG:2310:ikind=',ikind, ' ittype=', ittype 
         call FTPCLD(unit, ittype, 1, 1, naxis2, cold, status)  ! colnum = 1
         if (status .ne. 0) then
           call FTGERR(status, errtext)
@@ -660,23 +666,25 @@ if ((irelrow > 2) .and. (irelrow < 5)) then
 end if
           end do
           ittype = ittype + 1  ! FITS Table column number
+print *,'DEBUG:2410:ikind=',ikind, ' ittype=', ittype , ' iprm=',iprm
           call FTPCLD(unit, ittype, 1, 1, naxis2, cold, status)  ! colnum = 1
-  print *,'DEBUG:430:ittype=',ittype,' iout=',iout,' naxis2=',naxis2,' cold(3)=',cold(66)
+! print *,'DEBUG:430:ittype=',ittype,' iout=',iout,' naxis2=',naxis2,' cold(3)=',cold(66)
           if (status .ne. 0) then
             call FTGERR(status, errtext)
             write(stderr,'("ERROR: Failed in FTPCLD() with status=", I12,": ",A)') status, trim(errtext)
           end if
           call modify_ttype_comment(unit, ittype, ckey, status)
 
-          print *,'DEBUG:334:euler',iprm,'=',cold(63:65)
+!print *,'DEBUG:334:euler',iprm,'=',cold(63:65)
         end do
 !print *,'DEBUG:332:irowf(2)=',relrows(2)%irowf
 
       case('SFNum')   
         do iprm=1, 1
-          colj(:) = 0.0d0
+          colj(:) = 0
           iout = 0
           iend = 0
+print *,'DEBUG:2510:nrelrows=',nrelrows, ' ittype=', ittype 
           do irelrow=1, nrelrows  ! Each relrow (=asm_sfrow) number
             if (.not. relrows(irelrow)%is_valid) cycle
             iout = iend + 1
@@ -688,8 +696,15 @@ end if
             end if
             !colj(iout:iend) = frfrows(relrows(irelrow)%irowf)%eulers(iprm, 1)
             colj(iout:iend) = relrows(irelrow)%frf%sfn
+if (irelrow == 3) then
+print *,'DEBUG:2533:in the loop, iout=',iout,' iend=',iend
+call dump_type(relrows(3), 3)
+print *,'DEBUG:2534:in the loop'
+call dump_type(relrows(3)%frf)
+end if
           end do
           ittype = ittype + 1  ! FITS Table column number
+print *,'DEBUG:2540:FTPCLJ:nrelrows=',nrelrows, ' ittype=', ittype 
           call FTPCLJ(unit, ittype, 1, 1, naxis2, colj, status)  ! colnum = 1
           if (status .ne. 0) then
             call FTGERR(status, errtext)
@@ -703,15 +718,54 @@ print *,'DEBUG:364:sfn',iprm,'=',colj(63:65)
         end do
 call dump_type(relrows(5))
 
-      case('SF2bits') 
-      case('Fr6bits') 
-      case('i_frame') 
+      case('SF2bits', 'Mode_ASM', 'Mode_PHA', 'ModeSlew', 'bitrate')  ! 'Fr6bits', 'i_frame', are Frame-based 
+        ! Integer*2 columns
+        do iprm=1, 1
+          coli(:) = 0
+!coli(:) = -2
+          iout = 0
+          iend = 0
+          do irelrow=1, nrelrows  ! Each relrow (=asm_sfrow) number
+            if (.not. relrows(irelrow)%is_valid) cycle
+            iout = iend + 1
+            iend = iout+relrows(irelrow)%nframes-1
+            if (iend > naxis2) then  ! sanity check
+              write(stderr, '("ERROR: strange (in mode) with iout=",I6," <=> ",I6,"(max) when SFrow=",I5,"/",I5)') &
+                 iend, naxis2, irelrow, nrelrows
+              call err_exit_play_safe()
+            end if
+
+            select case(trim(ckey))
+            case('SF2bits') 
+              coli(iout:iend) = relrows(irelrow)%sf2bits 
+            case('Mode_ASM')
+              coli(iout:iend) = relrows(irelrow)%mode_asm
+            case('Mode_PHA')
+              coli(iout:iend) = relrows(irelrow)%mode_PHA 
+            case('ModeSlew')
+              coli(iout:iend) = relrows(irelrow)%mode_slew
+            case('bitrate')
+              coli(iout:iend) = relrows(irelrow)%bitrate
+            case default
+              call err_exit_play_safe() ! never happens
+            end select
+          end do
+          ittype = ittype + 1  ! FITS Table column number
+          call FTPCLI(unit, ittype, 1, 1, naxis2, coli, status)  ! colnum = 1
+          if (status .ne. 0) then
+            call FTGERR(status, errtext)
+            write(stderr,'("ERROR: (in mode) Failed in FTPCLI() with status=", I12,": ",A)') status, trim(errtext)
+          end if
+          call modify_ttype_comment(unit, ittype, ckey, status)
+          ! call FTSNUL(unit,colnum,snull > status) ! Define string representation for NULL column
+          ! call FTTNUL(unit,colnum,tnull > status) ! Define the integer(!) value to be treated as NULL
+        end do
       case('Status_C')
       case('DP_C')    
       case('ACS_C')   
       case('AMS_C')   
       case default
-        call EXIT(1)
+        call err_exit_with_msg('Parameter '//trim(ckey)//' is not yet taken into account.')
       end select
     end do
     if (allocated(coli)) deallocate(coli)
@@ -720,7 +774,7 @@ call dump_type(relrows(5))
   end subroutine write_cols
 
   ! Output FITS file of the ASM data
-  subroutine write_asm_evt_fits(outfil, fhead, trows, relrows, status)
+  subroutine write_asm_evt_fits(outfil, fhead, trows, relrows, status, outcolkeys)
     implicit none
     integer, parameter :: MY_FUNIT = 159  ! arbitrary
     character(len=*), parameter :: extname = 'ASM table'
@@ -731,6 +785,7 @@ call dump_type(relrows(5))
     !type(asm_frfrow), dimension(:), intent(in) :: frfrows
     type(asm_sfrow), dimension(:), intent(in) :: relrows
     integer, intent(out) :: status
+    character(len=*), dimension(:), intent(in), optional :: outcolkeys  ! e.g., ['Tstart', 'Euler', SFNum]
 
     integer :: unit, bitpix, blocksize !, naxis, hdutype, nframes, naxis1
     character(len=30) :: errtext
@@ -755,11 +810,20 @@ call dump_type(fhead)  ! for DEBUG
 !! colheads = get_colheads(['Tstart', 'Euler', SFNum])
 !! get_nframes_colheads(colheads)  ! interface of chars or t_asm_colhead
 !!!!!!!!!!!!!!!!!!!!!!!
-    colheads = get_colheads()  ! Column Header info
-                               ! %(key, type, prm%(form, unit, comm, dim))
+
+    if (present(outcolkeys)) then
+call dump_chars(outcolkeys, 'DEBUG:143: outcolkeys=')
+      colheads = get_colheads(outcolkeys)
+print *,'DEBUG:0095: size(colheads)=',size(colheads)
+    else
+      colheads = get_colheads()  ! Column Header info
+                                 ! %(key, type, prm%(form, unit, comm, dim))
+    end if
+if (size(colheads) > 94) then
 call dump_type(colheads(95))  ! for DEBUG
 call dump_type(colheads(97))  ! for DEBUG
 call dump_type(colheads(98))  ! for DEBUG
+end if
 !do i=99,size(colheads)  ! for DEBUG
 !  print *,'i=',i        ! for DEBUG
 !  call dump_asm_colhead(colheads(i))  ! for DEBUG
@@ -795,12 +859,16 @@ call ftpkyj(unit,'EXPOSURE',1500,'Total Exposure Time',status)  ! DEBUG
     
     ! Extension
     
-    ttypes = colheads(97:101)%type
-    tforms = colheads(97:101)%prm%form
-    tunits = colheads(97:101)%prm%unit
+!ttypes = colheads(97:101)%type
+!tforms = colheads(97:101)%prm%form
+!tunits = colheads(97:101)%prm%unit
+    ttypes = colheads%type
+    tforms = colheads%prm%form
+    tunits = colheads%prm%unit
     !call FTIBIN(unit,nrows,tfields,ttype,tform,tunit,extname,varidat > status) ! nrows should be 0 ! FiTs-Insert-BINary-table
     !call FTIBIN(unit,0,2,ttypes,tforms,tunits,'TestBinExt',.true., status) ! Creates an extension with basic header and moves to it.
     !call FTIBIN(unit, 0, size(ttypes) &
+print *,'DEBUG:0030: size(tforms)=TFIELDS=',size(tforms)
     call FTIBIN(unit, 0, size(tforms) &
               , ttypes, tforms, tunits, extname, .true., status) ! Creates an extension with basic header and moves to it.
     if (status .ne. 0) then

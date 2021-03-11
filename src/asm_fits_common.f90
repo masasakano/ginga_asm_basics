@@ -22,6 +22,7 @@ module asm_fits_common
   integer, parameter :: LEN_READABLE_KEY = 32  ! Char-length of maximum human-readable key name
   integer, parameter :: LEN_T_INVALID_FMT_KEY = 32
   integer, parameter :: LEN_PROC_STATS = 256
+  integer, parameter :: LEN_T_ARGV = 1024
   integer, parameter, public :: tfields_asm = 104  !!!!=========== Check!
 
   character(len=max_fits_char), dimension(n_all_fields) :: &
@@ -47,12 +48,16 @@ module asm_fits_common
   end interface get_onoff_enadis
 
   interface get_index
-    module procedure get_index_char, get_index_colhead, get_index_form_unit
+    module procedure get_index_char, get_index_argv, get_index_colhead, get_index_form_unit
   end interface get_index
 
   interface get_element
-    module procedure get_element_char, get_element_colhead, get_element_form_unit
+    module procedure get_element_char, get_element_argv, get_element_colhead, get_element_form_unit
   end interface get_element
+
+  interface get_val_from_key
+    module procedure get_val_from_key_argv
+  end interface get_val_from_key
 
   interface dump_type
     module procedure dump_asm_telem_row, dump_asm_frfrow, dump_asm_sfrow, dump_form_unit
@@ -64,6 +69,12 @@ module asm_fits_common
     module procedure get_ncols_colheads_char,       get_ncols_colheads_colheads
     module procedure get_ncols_colheads_frameunits, get_ncols_colheads_none
   end interface get_ncols_colheads
+
+  ! For command-line arguments
+  type t_argv
+    character(len=LEN_READABLE_KEY) :: key;
+    character(len=LEN_T_ARGV) :: val = '';
+  end type t_argv
 
   ! Number of the total frames of a Colheads
 
@@ -112,7 +123,7 @@ module asm_fits_common
     type(t_loc_fwb) :: MODE_ASM  = t_loc_fwb(f_multi=8,  f_offset=4,  word=TELEM_WORD_FROM0%dp,     bit=3, &
       note='(DP) (ON/OFF <=> 1/0)'); ! F8n+4 W66(=DP) B3: ASM Mode (ON/OFF <=> 1/0)
     type(t_loc_fwb) :: MODE_SLEW = t_loc_fwb(f_multi=32, f_offset=10, word=TELEM_WORD_FROM0%status, bit=3, &
-      note='(Status)'); ! F32n+10 W65(=Status) B3:  Slew369 Mode (is ON "1"? (unconfirmed)) ! Ref: Table 5.1.12, pp.209
+      note='(Status)'); ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed)) ! Ref: Table 5.1.12, pp.209
     type(t_loc_fwb) :: MODE_PHA  = t_loc_fwb(f_multi=8,  f_offset=4,  word=TELEM_WORD_FROM0%dp,     bit=4, &
       note='(DP) (TIME/PHA <=> 1/0)'); ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
     type(t_loc_fwb) :: MODE_PHA_W56 = t_loc_fwb(f_multi=0, f_offset=56, word=TELEM_WORD_FROM0%dp,     bit=4, &
@@ -152,7 +163,7 @@ module asm_fits_common
   !type t_telem_stat_bit_from0
   !  integer :: asm_dp =  3; ! F8n+4 W66(=DP) B3: ASM Mode (ON/OFF <=> 1/0)
   !  integer :: pha_time = 4; ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
-  !  integer :: slew   =  3; ! F32n+10 W65(=Status) B3:  Slew369 Mode (is ON "1"? (unconfirmed)) ! Ref: Table 5.1.12, pp.209
+  !  integer :: slew   =  3; ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed)) ! Ref: Table 5.1.12, pp.209
   !  integer :: asm_stat = 1; ! ON/OFF for ASM F15W65B1  ! (F32n+15, W65(Status)) Table 5.1.12, pp.213
   !  integer :: asa      = 2; ! ON/OFF for ASM-A    F15W65B2
   !  integer :: amc      = 3; ! ON/OFF for ASM-AMC  F15W65B3
@@ -196,7 +207,7 @@ module asm_fits_common
        ! B6: F 2
        ! B7: F 1
     integer(kind=ip4) :: STAT_OBS = -999; ! W65(=Status)
-       ! F32n+10 W65(=Status) B3:  Slew369 Mode (is ON "1"? (unconfirmed))
+       ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed))
        !   Ref1: Table 5.1.12, pp.209
     integer(kind=ip4) :: DPID_OBS = -999; ! W66(=DP)
        ! F8n+4 W66(=DP) B3:  ASM Mode (ON/OFF <=> 1/0)
@@ -331,7 +342,7 @@ module asm_fits_common
        !integer(ip4) :: sfn     = -999; ! SF Number in FRF determined by SIRIUS
        !integer(ip4) :: lostf   = -999; ! number of LOST Frames (wrong "SYNC")
     integer(ip4) :: mode_asm  = -999; ! F8n+4 W66(=DP) B3: ASM Mode (ON/OFF <=> 1/0)
-    integer(ip4) :: mode_slew = -999; ! F32n+10 W65(=Status) B3:  Slew369 Mode (is ON "1"? (unconfirmed)) ! Ref: Table 5.1.12, pp.209
+    integer(ip4) :: mode_slew = -999; ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed)) ! Ref: Table 5.1.12, pp.209
     integer(ip4) :: mode_PHA  = -999; ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
     integer(ip4) :: mode_PHA_W56 = -999; ! F56W66B4  (should be identical to mode_PHA (=F8n+4, W66B4)
     !integer(ip4) :: mode_real_stored = -999;
@@ -419,7 +430,7 @@ module asm_fits_common
                         ! i.e., Euler1, Euler2, Euler3 must be in a different variable.
                         ! n.b., for ACS_C, though it is an array, the corresponding TTYPE is only 1, hence dim=1
   end type t_form_unit
-  type(t_form_unit), dimension(11), parameter :: COL_FORM_UNITS = [ &
+  type(t_form_unit), dimension(15), parameter :: COL_FORM_UNITS = [ &
      ! note: I=Int*2, J=Int*4, D=Real*8
        t_form_unit(key='main',     root='',        form='1I', unit='count', comm='Main ASM data', dim=NWORDS_MAIN) & ! Special case: root should be explicitly specified when used. See function get_colheads()
      , t_form_unit(key='Tstart',   root='Tstart',  form='1D', unit='day', comm='Start datetime in MJD') &
@@ -428,18 +439,18 @@ module asm_fits_common
      , t_form_unit(key='SF2bits',  root='SF2bits', form='1I',  comm='2-bit SF from FI in Telemetry') &
      , t_form_unit(key='Fr6bits',  root='Fr6bits', form='1I',  comm='Frame number from FI in Telemetry') &
      , t_form_unit(key='i_frame',  root='i_frame', form='1I',  comm='i-th Frame in Telemetry') &
-    !   ! F32n+10 W65(=Status) B3:  Slew369 Mode (is ON "1"? (unconfirmed))
-    !   ! F8n+4 W66(=DP) B3:  ASM Mode (ON/OFF <=> 1/0)
-    !   ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
+     , t_form_unit(key='Mode_ASM', root='Mode_ASM', form='1I', comm='F4W66B3 ASM Mode (ON/OFF <=> 1/0)') & ! F8n+4 W66(=DP) B3:  ASM Mode (ON/OFF <=> 1/0)
+     , t_form_unit(key='Mode_PHA', root='Mode_PHA', form='1I', comm='F4W66B4 ASM(TIME/PHA <=> 1/0)') & ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
     !   !   Note: The same is found at F56W66B4 (but it is ignored).
+     , t_form_unit(key='ModeSlew', root='ModeSlew', form='1I', comm='F10W65B3 ASM Slew360') & ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed))
      , t_form_unit(key='Status_C', root='Status_C',form='1I', comm='STATUS (W65) in every Frame') &
      , t_form_unit(key='DP_C',     root='DP_C',    form='1I', comm='DP (W66) in every Frame') &
      , t_form_unit(key='ACS_C',    root='ACS_C',   form='3I', comm='ACS (W33-35) in every frame', dim=1) &  ! 3I but dim=1
      , t_form_unit(key='AMS_C',    root='AMS_C',   form='8I', comm='W48-51, W112-115 in every Frame', dim=1) &  ! 8I but dim=1
-     !, t_form_unit(key='bitrate', root='bitrate', form='1I', comm='Bitrate') &
+     , t_form_unit(key='bitrate',  root='bitrate', form='1I', comm='Bitrate') &
      ]
     !integer(kind=ip4) :: STAT_OBS = -999; ! W65(=Status)
-    !   ! F32n+10 W65(=Status) B3:  Slew369 Mode (is ON "1"? (unconfirmed))
+    !   ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed))
     !   !   Ref1: Table 5.1.12, pp.209
     !integer(kind=ip4) :: DPID_OBS = -999; ! W66(=DP)
     !   ! F8n+4 W66(=DP) B3:  ASM Mode (ON/OFF <=> 1/0)
@@ -718,6 +729,21 @@ contains
     if (.not. is_silent) write(stderr,'(A)') 'WARNING: (get_index_char) Index is not found for key="'//trim(key)//'"'
   end function get_index_char
 
+  integer function get_index_argv(key, ary) result(iret)
+    character(len=*), intent(in) :: key
+    type(t_argv), dimension(:), intent(in) :: ary
+    integer :: i
+
+    do i=1, size(ary)
+      if (trim(ary(i)%key) == trim(key)) then
+        iret = i
+        return
+      end if
+    end do
+    write(stderr,'(A)') 'WARNING: (get_index_argv) Index is not found for key="'//trim(key)//'"'
+    iret = -999
+  end function get_index_argv
+
   integer function get_index_colhead(key, ary) result(iret)
     character(len=*), intent(in) :: key
     type(t_asm_colhead), dimension(:), intent(in) :: ary
@@ -773,6 +799,15 @@ contains
     retobj = ary(get_index(key, ary))  ! If not found, the result is uncertain.
   end function get_element_char
 
+  function get_element_argv(key, ary) result(retobj)
+    character(len=*), intent(in) :: key
+    type(t_argv), dimension(:), intent(in) :: ary
+    type(t_argv) :: retobj
+    integer :: i
+
+    retobj = ary(get_index(key, ary))  ! If not found, the result is uncertain.
+  end function get_element_argv
+
   function get_element_colhead(key, ary) result(retobj)
     character(len=*), intent(in) :: key
     type(t_asm_colhead), dimension(:), intent(in) :: ary
@@ -786,10 +821,24 @@ contains
     character(len=*), intent(in) :: key
     type(t_form_unit), dimension(:), intent(in) :: ary
     type(t_form_unit) :: retobj
-    integer :: i
 
     retobj = ary(get_index(key, ary))  ! If not found, the result is uncertain.
   end function get_element_form_unit
+
+  !-----------------------------------------
+  ! interface get_val_from_key
+  !   : to get the (representative) value of the first element of the array which has the key
+  !-----------------------------------------
+  
+  function get_val_from_key_argv(key, ary) result(retobj)
+    character(len=*), intent(in) :: key
+    type(t_argv), dimension(:), intent(in) :: ary
+    character(len=LEN_T_ARGV) :: retobj
+    type(t_argv) :: tmp
+
+    tmp = get_element(key, ary)
+    retobj = tmp%val  ! If not found, the result is uncertain.
+  end function get_val_from_key_argv
 
   !-----------------------------------------
   
@@ -952,6 +1001,38 @@ contains
 
     ret = t_frame_word_bit(frame=iframe, word=iword, bit=ibit) 
   end function frame_word_first
+
+  ! dump character array
+  subroutine dump_chars(rows, prefix)
+    character(len=*), dimension(:), intent(in) :: rows
+    character(len=*), intent(in), optional :: prefix
+    character(len=256) :: prefix_out
+    integer :: i
+
+    if (present(prefix)) then
+      prefix_out = prefix
+    else
+      prefix_out = ''
+    end if
+    
+    write(*,'(A,"[")',advance='no') trim(prefix_out)
+    do i=1, size(rows)
+      write(*,'("''",A,"''")',advance='no') trim(rows(i))
+      if (i .ne. size(rows)) write(*,'(", ")',advance='no')
+    end do
+    write(*,'("]")')
+  end subroutine dump_chars
+
+  ! dump all_argv
+  subroutine dump_all_argv(rows)
+    type(t_argv), dimension(:), intent(in) :: rows
+    integer :: i
+
+    print *, '--------- all argv (size=', size(rows), ') ---------' 
+    do i=1, size(rows)
+      print *, trim(ladjusted_int(i))//': ('//trim(rows(i)%key)//') ', trim(rows(i)%val)
+    end do
+  end subroutine dump_all_argv
 
   ! dump internal FRF data
   subroutine dump_asm_telem_row(row)
@@ -1284,16 +1365,25 @@ contains
   !-----------------------------------------
 
   ! Number of the total columns (TTYPEs) of a Colheads corresponding to the given Character array
+  !
+  ! If the keyword is not found, a negative value is returned.
   function get_ncols_colheads_char(ckeys) result(nframes)
     character(len=*), dimension(:), intent(in) :: ckeys
     integer :: nframes ! return
-    integer :: i
+    integer :: i, ind
     type(t_form_unit) :: tmp_fu
 
     nframes = 0
     do i=1, size(ckeys)
-      tmp_fu = get_element(trim(ckeys(i)), COL_FORM_UNITS)
-      nframes = nframes + tmp_fu%dim
+      ind = get_index(trim(ckeys(i)), COL_FORM_UNITS)
+      if (ind < 0) then
+        ! NOT found
+        nframes = -999
+        return
+      end if
+      nframes = nframes + COL_FORM_UNITS(ind)%dim
+      !tmp_fu = get_element(trim(ckeys(i)), COL_FORM_UNITS)  ! With this, an error is hard to capture.
+      !nframes = nframes + tmp_fu%dim
     end do
   end function get_ncols_colheads_char
 
@@ -1329,7 +1419,7 @@ contains
   !
   ! Condition: TTYPE and key agree, except for the dimension
   !
-  ! If member "dimsion" in COL_FORM_UNITS is greater than 1, this sets multiple TTYPES
+  ! If member "dimension" in COL_FORM_UNITS is greater than 1, this sets multiple TTYPES
   ! for the "dimsion" number.  For example, key=Euler has dimsion=3; thus
   ! EULER1, EULER2, EULER3 are set.
   !
@@ -1338,14 +1428,27 @@ contains
     integer, intent(in) :: index_start ! colheads(index_start) and onwards will be set in this routine.
     character(len=*), intent(in) :: key
     type(t_asm_colhead), dimension(:), intent(inout) :: colheads
-    integer, intent(out) :: index_last ! up to colheads(index_last) is set after this routine.
+    integer, intent(out) :: index_last ! up to colheads(index_last) is set after this routine.  If negative, something has gone wrong.
 
     type(t_form_unit) :: colprm
     character(len=MAX_LEN_FKEY) :: sk
     character(len=max_fits_char) :: root, ttype ! TTYPE (for temporary use)
-    integer :: idim
+    character(len=10240) :: msg
+    integer :: idim, i
 
-    colprm = get_element(key, COL_FORM_UNITS)
+!print *,'DEBUG:423:set_colhn'    
+!call dump_type(ary(size(ary)))
+    !colprm = get_element(key, COL_FORM_UNITS)  ! With this, error is difficult to catch.
+    i = get_index(key, COL_FORM_UNITS)
+!print *,'DEBUG:424:i=',i
+    if (i < 0) then
+      ! No column is found!
+      index_last = -999
+      write(stderr, '(A)') 'WARNING(set_colheads_single): Key='//trim(key)//' is not defined in COL_FORM_UNITS.'
+!call err_exit_with_msg(msg)
+      return
+    end if
+    colprm = COL_FORM_UNITS(i)
 
     index_last = index_start + colprm%dim - 1
     if (colprm%dim > 1) then
@@ -1390,11 +1493,18 @@ contains
     character(len=LEN_READABLE_KEY) :: sk
     integer :: i, irow, ikey, ittype, ilast, nsiz, increment
     type(t_form_unit) :: tmp_fu
+    character(len=1024) :: msg
 !character(len=LEN_TTYPE) :: tmp_cha  ! for DEBUG
 
     if (present(ckeys)) then
       colhead_keys = ckeys
       nsiz = get_ncols_colheads(colhead_keys)
+      if (nsiz < 0) then
+        call dump_chars(colhead_keys, 'ERROR: in get_colheads, given keys=')
+        ! The keyword was not found!
+        msg = 'One (or more) of the keys is not defined in COL_FORM_UNITS (Failed in get_colheads).'
+        call err_exit_with_msg(msg)
+      end if
     else
       colhead_keys = COL_FORM_UNITS(:)%key
       nsiz = get_ncols_colheads()
@@ -1431,6 +1541,11 @@ if (ittype > nsiz) call err_exit_play_safe()
         end do
       case default
         call set_colheads_single(ittype+1, colhead_keys(ikey), colheads, index_last=ilast)
+        if (ilast < 0) then
+          ! The keyword was not found!
+          msg = 'Key='//trim(colhead_keys(ikey))//' is not defined in COL_FORM_UNITS (Failed in get_colheads).'
+          call err_exit_with_msg(msg)
+        end if
         ittype = ilast
 if (ittype > nsiz) call err_exit_play_safe()
       end select

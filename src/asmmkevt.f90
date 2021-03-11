@@ -25,7 +25,7 @@ program asmmkevt
   real(kind=dp8) ::     MJDS(4)
   real(kind=dp8) ::     RBUFFS(17,4),ELVYS(4)
 
-  integer :: i !, j
+  integer :: i, j
   character(len=1024) :: errmsg, arg, fname = '', telfil='', frffil = '', outfil = '', s
   character(len=30) :: errtext
 
@@ -54,13 +54,26 @@ program asmmkevt
       !DOUBLE PRECISION    dvalues(2)
 !---------- TEST       up to here
 
-   !! USAGE: /asmmkevt ../../../ginga_samples/ginga_sirius_P198804280220.fits ../../../ginga_samples/FR880428.S0220.fits ../../../ginga_samples/mkevt_out_test.fits
-  i = -1  ! i=0 is for $0
+  !type(t_argv), dimension(:), allocatable :: allargv
+  type(t_argv), dimension(3) :: argv
+
+   !! USAGE: /asmmkevt ../../ginga_samples/ginga_sirius_P198804280220.fits ../../ginga_samples/FR880428.S0220.fits ../../ginga_samples/mkevt_out_test.fits
+  argv = [t_argv(key='telemetry'), t_argv(key='FRF'), t_argv(key='outfile')] 
+  i = -1  ! i=0 is for $0 (index for all the original ARGV)
+  j =  0  ! Index only for the main arugment.
   do
     i = i+1
     call get_command_argument(i, arg)
     if (i == 0) cycle
     if (len_trim(arg) == 0) exit
+
+    if ((trim(arg) == '-h') .or. (trim(arg) == '--help')) then
+      print *, 'USAGE: asmmkevt [-h] Telemetry.fits FRF.fits out.fits'
+      call EXIT(0)
+    end if
+    j = j + 1
+    if (j > 3) call err_exit_with_msg('The number of the main argument must be exactly 3, but given more.')
+    argv(j)%val = arg
     if (i == 1) then
       fname = arg  ! Telemetry
       telfil= arg
@@ -73,6 +86,7 @@ program asmmkevt
       write (*,*) 'Outfile:   '//trim(arg)
     end if
   end do
+  if (j < 3) call err_exit_with_msg('The number of the main argument must be exactly 3, but given only '//trim(ladjusted_int(j)))
 
   WRITE (*,*) 'fname=' // TRIM(fname)  ! maybe syntax error strictly?
 
@@ -140,19 +154,21 @@ program asmmkevt
   !---------------- MAIN ------------------
     
   ! Get telm_rows from the default data with add_mjd2telem(tfhead, telm_rows)
-  call read_telemetry(trim(telfil), tfhead, headers, telems) ! tfhead: Telemetry-Fits-HEADer
+  call read_telemetry(trim(get_val_from_key('telemetry', argv)), tfhead, headers, telems) ! tfhead: Telemetry-Fits-HEADer
   trows = get_telem_raws2types(headers, telems)
   call add_mjd2telem(tfhead, trows)
 
   ! Get the FRF
-  call mk_frf_rows(trim(frffil), frfhead, frfrows)
+  !call mk_frf_rows(trim(frffil), frfhead, frfrows)
+  call mk_frf_rows(trim(get_val_from_key('FRF', argv)), frfhead, frfrows)
 
   !--- get ASM_sfrows (for relation)
   relrows = get_asm_sfrow(trows, frfrows)
-  call update_asm_sfrow_modes(trows, relrows)
+  call update_asm_sfrow_modes(trows, relrows) !, skip_validate=.true.)
 
   !call write_asm_fits(trim(DEF_FNAME_OUT), tfhead, trows, frfrows, relrows, status)
-  call write_asm_evt_fits(outfil, tfhead, trows, relrows, status)
+  !call write_asm_evt_fits(outfil, tfhead, trows, relrows, status)
+  call write_asm_evt_fits(get_val_from_key('outfile', argv), tfhead, trows, relrows, status)
 
 if (.false.) then
 ! ******** write test fits **********
