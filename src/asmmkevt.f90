@@ -32,7 +32,7 @@ program asmmkevt
   integer :: funit, status=-999, blocksize !, hdutype, nframes, naxis1
   integer, dimension(Maxaxes) :: naxes
 
-  type(fits_header) :: tfhead
+  type(fits_header) :: tfhead, outhead
   integer(kind=1), dimension(:, :), allocatable :: headers, telems !  (word, row)
   type(asm_telem_row), dimension(:), allocatable :: trows
 
@@ -155,6 +155,7 @@ program asmmkevt
     
   ! Get telm_rows from the default data with add_mjd2telem(tfhead, telm_rows)
   call read_telemetry(trim(get_val_from_key('telemetry', argv)), tfhead, headers, telems) ! tfhead: Telemetry-Fits-HEADer
+call dump_type(tfhead, 1) !! DEBUG
   trows = get_telem_raws2types(headers, telems)
   call add_mjd2telem(tfhead, trows)
 
@@ -168,7 +169,8 @@ program asmmkevt
 
   !call write_asm_fits(trim(DEF_FNAME_OUT), tfhead, trows, frfrows, relrows, status)
   !call write_asm_evt_fits(outfil, tfhead, trows, relrows, status)
-  call write_asm_evt_fits(get_val_from_key('outfile', argv), tfhead, trows, relrows, status)
+  outhead = get_merged_head(tfhead, frfhead)
+  call write_asm_evt_fits(get_val_from_key('outfile', argv), outhead, trows, relrows, status)
 
 if (.false.) then
 ! ******** write test fits **********

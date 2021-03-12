@@ -20,7 +20,7 @@ program asmtelemetryout
 
   integer :: status=-999 !, hdutype, nframes, naxis1
 
-  type(fits_header) :: tfhead
+  type(fits_header) :: tfhead, outhead
   integer(kind=1), dimension(:, :), allocatable :: headers, telems !  (word, row)
   type(asm_telem_row), dimension(:), allocatable :: trows
 
@@ -56,8 +56,8 @@ print *,'DEBUG:003: size(allargv)=',size(allargv)
 
     if ((trim(arg) == '-h') .or. (trim(arg) == '--help')) then
       print *, 'USAGE: asmtelemetryout [-h] Telemetry.fits FRF.fits out.fits KEY1 [Key2 [Key3 ...]]'
-      print *, ' Keys: Tstart|Euler|SFNum|SF2bits|Fr6bits|i_frame|Status_C|DP_C|ACS_C|AMS_C|Bitrate' &
-                   //'|ASM_Mode|Slew360|Time_PHA|F56W66B4|'
+      print *, ' Keys: Tstart|Euler|SFNum|SF2bits|Fr6bits|FrameNum|i_frame|Status_C|Status_S|DP_C|DP_S' &
+                   //'|ACS_C|ASM_C1|ASM_C2|bitrate|ASM_Mode|Slew360|Time_PHA|F56W66B4|'
       call EXIT(0)
     end if
     if (istart_main < 0) istart_main = i
@@ -94,12 +94,14 @@ call dump_all_argv(allargv) ! DEBUG
   relrows = get_asm_sfrow(trows, frfrows)
   call update_asm_sfrow_modes(trows, relrows, skip_validate=.true.) ! skip_validate: Major difference from asmmkevt.f90
 
+  outhead = get_merged_head(tfhead, frfhead)
+
   if (n_mainarg == 3) then
-    call write_asm_evt_fits(get_val_from_key('outfile', allargv), tfhead, trows, relrows, status)
+    call write_asm_evt_fits(get_val_from_key('outfile', allargv), outhead, trows, relrows, status)
   else
 print *,'DEBUG:032: ' 
 call dump_all_argv(allargv(istart_main+3:)) ! DEBUG
-    call write_asm_evt_fits(get_val_from_key('outfile', allargv), tfhead, trows, relrows, status, allargv(istart_main+3:)%val)
+    call write_asm_evt_fits(get_val_from_key('outfile', allargv), outhead, trows, relrows, status, allargv(istart_main+3:)%val)
   end if
 
     ar_strs_stats = calc_proc_stats(trows, relrows)  ! allocatable

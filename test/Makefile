@@ -48,10 +48,15 @@ GINGA_FRFREAD_OBJ = ../../ginga_tools/v1.1/src/frfread.o ../../ginga_tools/v1.1/
 #        ${GINGA_TOOLS_DIR}/cnven.o ${GINGA_TOOLS_DIR}/mjd.o ${GINGA_TOOLS_DIR}/srcarray.o \
 #        ${GINGA_TOOLS_DIR}/satpn3.o ${GINGA_TOOLS_DIR}/orbit.o ${GINGA_TOOLS_DIR}/recpol_new.o
 
-ASMTEST_OBJ = asmtest.o unittest.o ${SRCDIR}/fort_util.o ${SRCDIR}/err_exit.o \
+ASMTEST_OBJ = unittest.o ${SRCDIR}/fort_util.o ${SRCDIR}/err_exit.o \
         ${SRCDIR}/asm_fits_common.o ${SRCDIR}/asm_aux.o ${SRCDIR}/asm_read_telemetry.o ${SRCDIR}/asm_fitsout.o 
-asmtest: ${ASMTEST_OBJ} ${GINGA_FRFREAD_OBJ}
-	${LD} -o asmtest ${ASMTEST_OBJ} ${GINGA_FRFREAD_OBJ} ${LINKLIB}
+
+# Required to remake ./*.mod (I think)
+asmtest.o: asmtest.f90 ${ASMTEST_OBJ}
+	${FC} ${FFLAGS} -I../src -c -o $@ $<
+
+asmtest: asmtest.o ${ASMTEST_OBJ} ${GINGA_FRFREAD_OBJ}
+	${LD} -o asmtest asmtest.o ${ASMTEST_OBJ} ${GINGA_FRFREAD_OBJ} ${LINKLIB}
 
 %.o : %.F parameters.F
 	${FC} ${FFLAGS} -c -o $@ $<

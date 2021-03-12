@@ -41,7 +41,7 @@ module test_common
      , 123,   9,  99, 247,   0,  2,  1,  1,  0,  1,  0,  0,  0,  1,  0,  1 &
      ,  66,  44, 192,  65,   0,  1,  0,  0,  1,  0,  0,  1,  0,  2,  0,  0 &
      ,  11,   5,  12,   7,   2,  3,  0,  1,  0,  0,  0,  0,  2,  1,  0,  0 &
-     ,  89, 208, 244,  33,   0,  0,  1,  0,  0,  0,  0,  1,  0,  1,  0,  1 &
+     ,  89, 208, 244,  33,   0,  0,  1,  0,  0,  0,  0,  1,  0,  1,  0,  1 & ! Status(W65)=208, DP(W66)=252, PI_MON=113 
      ,  27, 194, 194,  53,   1,  1,  1,  1,  0,  0,  0,  1,  1,  0,  1,  1 &
      , 153,  95,   4,  84,   1,  1,  0,  0,  1,  1,  0,  0,  1,  0,  1,  0 &
      ,  14,  10,  15,   8,   0,  0,  0,  0,  1,  0,  0,  0,  1,  0,  2,  0 &
@@ -213,7 +213,7 @@ contains
 
     ret_status = 0  ! normal ends (n.b., returned value)
 
-    exq1 = size(COL_FORM_UNITS) - 2 + NWORDS_MAIN + 3  ! nb, 3 for Euler1-3
+    exq1 = size(COL_FORM_UNITS) - 5 + NWORDS_MAIN + 3 + 3 + 4 + 4 ! nb, 3 for Euler1-3, 3,4,4 for ACS_C,ASM?_C
 
     do j=1, size(ChKeys)
       sk = ChKeys(j)
@@ -257,7 +257,7 @@ contains
   ! Returns 1 if error is raised (0 otherwise)
   integer function run_test_common_misc() result(ret_status)
     character(*), parameter :: subname = 'run_test_common_misc'
-    integer,      parameter :: TOT_NTESTS = 8
+    integer,      parameter :: TOT_NTESTS = 14
     logical, dimension(TOT_NTESTS) :: ress
 
     character(len=6), dimension(3), parameter :: char2tests = ['someth', '      ', 'main  ']
@@ -284,6 +284,12 @@ contains
       , assert_smaller_than(0, get_index('naiyo', COL_FORM_UNITS, silent=.true.), trim(subname), 'get_index') &
       , assert_greater_than(96, size(colheads), trim(subname), 'size(colheads)') &
       , assert_equal(colheads(8)%key, colheads(8)%prm%key, trim(subname), 'colheads key') &  ! 8 is random
+      , assert_equal(1,  get_asmdats_row4col(1), subname, 'get_asmdats_row4col(1)') &
+      , assert_equal(96, get_asmdats_row4col(96), subname, 'get_asmdats_row4col(96)') &
+      , assert_equal(2,  get_asmdats_row4col(9), subname, 'get_asmdats_row4col(9)') &
+      , assert_equal(13, get_asmdats_row4col(2), subname, 'get_asmdats_row4col(2)') &
+      , assert_equal(17, get_asmdats_row4col(34), subname, 'get_asmdats_row4col(34)') & ! Y1 FW2 CH01
+      , assert_equal(18, get_asmdats_row4col(42), subname, 'get_asmdats_row4col(42)') & ! Y1 FW2 CH09
       !, assert_equal(colheads%key, colheads%prm%key, trim(subname), 'colheads key') &
       ]
 
@@ -354,7 +360,7 @@ contains
   ! Returns 1 if error is raised (0 otherwise)
   integer function run_test_get_telem_raws2types() result(ret_status)
     character(*), parameter :: subname = 'run_test_get_telem_raws2types'
-    integer,      parameter :: TOT_NTESTS = 11
+    integer,      parameter :: TOT_NTESTS = 12
     type(fits_header) :: fhead
     integer(kind=1), dimension(:, :), allocatable :: headers, telems !  (word, row)
     type(asm_telem_row), dimension(:), allocatable :: telm_rows
@@ -380,6 +386,7 @@ contains
        , assert_equal(TELEMS_T1_I4(w_no('status', from1=.true.)), telm_rows(1)%STAT_OBS, subname, 'for Status from Tel') &
        , assert_equal(TELEMS_T1_I4(w_no('dp',     from1=.true.)), telm_rows(1)%DPID_OBS, subname, 'for DP from Tel') &
        , assert_equal(TELEMS_T1_I4(w_no('pi_mon', from1=.true.)), telm_rows(1)%pi_mon,   subname, 'for PI_MON from Tel') &
+       , assert_equal(TELEMS_T1_I4(5:16), telm_rows(1)%asmdats(1:12), subname, 'for asmdats') &
          ! Status(STAT_OBS:W65)=208, DP(DPID_OBS:W66)=252, PI_MON=113
        ]
 

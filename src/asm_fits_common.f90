@@ -14,15 +14,23 @@ module asm_fits_common
   integer, parameter, public :: MAX_LEN_FKEY  = 8  ! FITS key maximum length of characters
   integer, parameter, public :: nchar_extname = 8
   integer, parameter, public :: NFRAMES_PER_SF = 64  ! Number of Frames per SABU-Frame
-  integer, parameter, public :: num_instr = 6, nchan_pha = 16, nchan_time = 8  ! Number of channels in each mode 
+  integer, parameter, public :: NUM_INSTR = 6, NCHANS_PHA = 16, NCHANS_TIME = 8  ! Number of channels in each mode 
   integer, parameter, public :: NBYTESPERCARD = 144
-  integer, parameter, public :: NWORDS_MAIN = num_instr*nchan_pha  ! Number of words (=bytes) of Main (mode-dependent) section in a frame: 96
+  integer, parameter, public :: NWORDS_MAIN = NUM_INSTR*NCHANS_PHA  ! Number of words (=bytes) of Main (mode-dependent) section in a frame: 96
   character(len=*), parameter, public :: tunit_main = 'count'
   integer, parameter, public :: ASM_STATUS_FN = 15; ! (First) Frame number; F15W65B1 ! (F32n+15, W65(Status)) Table 5.1.12, pp.213
+  integer, parameter, public :: DIM_ACS_C = 3, DIM_ASM_C = 4;  ! Number of words for ACS and (each of the two) ASM in the common area in each telemetry frame
   integer, parameter :: LEN_READABLE_KEY = 32  ! Char-length of maximum human-readable key name
   integer, parameter :: LEN_T_INVALID_FMT_KEY = 32
   integer, parameter :: LEN_PROC_STATS = 256
   integer, parameter :: LEN_T_ARGV = 1024
+  character(len=*), parameter :: OUTFTCOMMENT1 = 'Created by combining a Ginga telemetry file&
+     & and corresponding FRF for the LAC.  However, the LAC FRFs usually lack the data in which&
+     & the ASM-Mode is on.  Therefore, no meaningful Euler angles appear in the Table&
+     & and those in the header are only the best guesses taken from a frame (if&
+     & there was any) shortly before and after the period in which the ASM-Mode was on.'
+
+
   integer, parameter, public :: tfields_asm = 104  !!!!=========== Check!
 
   character(len=max_fits_char), dimension(n_all_fields) :: &
@@ -86,9 +94,12 @@ module asm_fits_common
     integer :: status = 65; ! W65
     integer :: dp     = 66; ! W66
     integer :: pi_mon = 67; ! W67
+    integer :: acss   = 33; ! W33 (ACS: the fist word)
     integer :: acs1   = 33; ! W33 (ACS: W33-W35)
     integer :: acs2   = 34; ! W33 (ACS: W33-W35)
     integer :: acs3   = 35; ! W33 (ACS: W33-W35)
+    integer :: asm1_commons =  48; ! W48  (ASM: W48-W51: the fist word in the common area)
+    integer :: asm2_commons = 112; ! W112 (ASM: W112-W115: the fist word in the common area)
   end type t_telem_word_from0
   type(t_telem_word_from0), parameter :: TELEM_WORD_FROM0 = t_telem_word_from0()
 
@@ -207,9 +218,11 @@ module asm_fits_common
        ! B6: F 2
        ! B7: F 1
     integer(kind=ip4) :: STAT_OBS = -999; ! W65(=Status)
+    character(len=8) :: STAT_OBS_B8 = ''; ! String Bit expression of W65(=Status)
        ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed))
        !   Ref1: Table 5.1.12, pp.209
     integer(kind=ip4) :: DPID_OBS = -999; ! W66(=DP)
+    character(len=8) :: DPID_OBS_B8 = ''; ! String Bit expression of W66(=DP)
        ! F8n+4 W66(=DP) B3:  ASM Mode (ON/OFF <=> 1/0)
        !   Note: In short, F4 alone should be fine.  In practice, in some SFs,
        !         F4 may be missing.  In this code, such frames should be discarded.
@@ -234,10 +247,13 @@ module asm_fits_common
     integer(kind=ip4) :: w_fi;      ! FI (Frame-Info) (W3; 4th byte) in Telemetry
     integer(kind=ip4) :: sf_2bit;   ! 2-bit info of the SF in Telemetry
     integer(kind=ip4) :: fr_6bit;   ! Current frame number as recorded in Telemetry in 6 bits
+    integer(kind=ip4) :: FrameNum;  ! Frame number (F1-F64, as referred to in Reference), i.e., fr_6bit+1
     integer(kind=ip4) :: i_frame;   ! i-th frame in the current SF
-    real(kind=dp8), dimension(3) :: eulers, angles_intn;  ! Internal angle x,y,z
-    integer(kind=ip4), dimension(3) :: acss;      ! acss = 3 bytes
-    integer(kind=ip4), dimension(nwords_main) :: asmdats; ! Main ASM data; Y[1-2]FW[1-3](ch[0-15]) for PHA mode, Y[1-2]FW[1-3][LH](ch[0-7]) for Time mode
+    !real(kind=dp8), dimension(3) :: eulers;   ! Not in the telemetry frame?
+    integer(kind=ip4), dimension(DIM_ACS_C) :: acss;        ! acss = 3 bytes (W33-35)
+    integer(kind=ip4), dimension(DIM_ASM_C) :: asm1_commons; ! AMS in the common area (W48-51) = 4 bytes
+    integer(kind=ip4), dimension(DIM_ASM_C) :: asm2_commons; ! AMS in the common area (W112-115) = 4 bytes
+    integer(kind=ip4), dimension(NWORDS_MAIN) :: asmdats; ! Main ASM data; Y[1-2]FW[1-3](ch[0-15]) for PHA mode, Y[1-2]FW[1-3][LH](ch[0-7]) for Time mode
   end type asm_telem_row
 
   ! ASM FRF; row-based, ie., each row constitutes 1 variable, and SF (sabu-frame) based.
@@ -430,7 +446,7 @@ module asm_fits_common
                         ! i.e., Euler1, Euler2, Euler3 must be in a different variable.
                         ! n.b., for ACS_C, though it is an array, the corresponding TTYPE is only 1, hence dim=1
   end type t_form_unit
-  type(t_form_unit), dimension(15), parameter :: COL_FORM_UNITS = [ &
+  type(t_form_unit), dimension(19), parameter :: COL_FORM_UNITS = [ &
      ! note: I=Int*2, J=Int*4, D=Real*8
        t_form_unit(key='main',     root='',        form='1I', unit='count', comm='Main ASM data', dim=NWORDS_MAIN) & ! Special case: root should be explicitly specified when used. See function get_colheads()
      , t_form_unit(key='Tstart',   root='Tstart',  form='1D', unit='day', comm='Start datetime in MJD') &
@@ -438,15 +454,19 @@ module asm_fits_common
      , t_form_unit(key='SFNum',    root='SFNum',   form='1J',  comm='As defined in FRF if defined') &
      , t_form_unit(key='SF2bits',  root='SF2bits', form='1I',  comm='2-bit SF from FI in Telemetry') &
      , t_form_unit(key='Fr6bits',  root='Fr6bits', form='1I',  comm='Frame number from FI in Telemetry') &
-     , t_form_unit(key='i_frame',  root='i_frame', form='1I',  comm='i-th Frame in Telemetry') &
+     , t_form_unit(key='FrameNum', root='FrameNum', form='1I',  comm='Frame number for F1-F64') &
+     , t_form_unit(key='i_frame',  root='i_frame', form='1J',  comm='i-th Frame in Telemetry from 1') &
      , t_form_unit(key='Mode_ASM', root='Mode_ASM', form='1I', comm='F4W66B3 ASM Mode (ON/OFF <=> 1/0)') & ! F8n+4 W66(=DP) B3:  ASM Mode (ON/OFF <=> 1/0)
      , t_form_unit(key='Mode_PHA', root='Mode_PHA', form='1I', comm='F4W66B4 ASM(TIME/PHA <=> 1/0)') & ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
     !   !   Note: The same is found at F56W66B4 (but it is ignored).
      , t_form_unit(key='ModeSlew', root='ModeSlew', form='1I', comm='F10W65B3 ASM Slew360') & ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed))
      , t_form_unit(key='Status_C', root='Status_C',form='1I', comm='STATUS (W65) in every Frame') &
+     , t_form_unit(key='Status_S', root='Status_S',form='8A', comm='STATUS (W65-8bit) in every Frame') &
      , t_form_unit(key='DP_C',     root='DP_C',    form='1I', comm='DP (W66) in every Frame') &
-     , t_form_unit(key='ACS_C',    root='ACS_C',   form='3I', comm='ACS (W33-35) in every frame', dim=1) &  ! 3I but dim=1
-     , t_form_unit(key='AMS_C',    root='AMS_C',   form='8I', comm='W48-51, W112-115 in every Frame', dim=1) &  ! 8I but dim=1
+     , t_form_unit(key='DP_S',     root='DP_S',    form='8A', comm='DP (W66-8bit) in every Frame') &
+     , t_form_unit(key='ACS_C',    root='ACS_C',   form='1I', comm='ACS (W33-35) in every frame', dim=DIM_ACS_C) &  ! dim=3 ! asm_telem_row%acss
+     , t_form_unit(key='ASM1_C',   root='ASM1_C',  form='1I', comm='ASM W48-51 in every Frame', dim=DIM_ASM_C) &  ! dim=4 ! asm_telem_row%asm1_commons
+     , t_form_unit(key='ASM2_C',   root='ASM2_C',  form='1I', comm='ASM W112-115 in every Frame', dim=DIM_ASM_C) &  ! dim=4 ! asm_telem_row%asm2_commons
      , t_form_unit(key='bitrate',  root='bitrate', form='1I', comm='Bitrate') &
      ]
     !integer(kind=ip4) :: STAT_OBS = -999; ! W65(=Status)
@@ -744,6 +764,34 @@ contains
     iret = -999
   end function get_index_argv
 
+
+  ! Get the number associated with TTYPE in colhead, like 3 in TTYPEn='Euler3'
+  integer function get_colhead_type_num(colhead, name) result(iret)
+    type(t_asm_colhead), intent(in) :: colhead
+    character(len=*), intent(in) :: name ! for the prefix, like 'Euler'. Mandatory
+    integer :: status
+    character(len=max_fits_char) :: kwd
+    character(len=1024) :: usermsg
+
+    read(colhead%type, '(A'//trim(ladjusted_int(len_trim(name)))//',I3)', iostat=status) kwd, iret
+
+    if (trim(kwd) .ne. trim(name)) then
+      print *, 'ERROR(get_colhead_type_num): colhead is:'
+      call dump_type(colhead)
+      write(usermsg, '("Key is not Expected=",A," <=> ",A)') trim(kwd), trim(name)
+      call err_exit_play_safe(usermsg)
+    end if
+
+    if (status .ne. 0) then
+      ! Read (format?) error
+      print *, 'ERROR(get_colhead_type_num): colhead is:'
+      call dump_type(colhead)
+      write(usermsg, '("(get_colhead_type_num) Status is non-zero: ",I8)') status
+      call err_exit_with_msg(usermsg)
+    end if
+  end function get_colhead_type_num
+
+
   integer function get_index_colhead(key, ary) result(iret)
     character(len=*), intent(in) :: key
     type(t_asm_colhead), dimension(:), intent(in) :: ary
@@ -883,7 +931,8 @@ contains
 
     retrow = -999
     do irow=istart, istart+nrows-1
-      if (frn == trows(irow)%fr_6bit) then
+      !if (frn == trows(irow)%fr_6bit) then
+      if (frn == trows(irow)%FrameNum) then
         retrow = irow
         return
       end if
@@ -927,17 +976,24 @@ contains
       add1 = 0
     end if
 
-    if (     trim(name) == 'fi') then
+    select case(trim(name))
+    case('fi')
       iret = TELEM_WORD_FROM0%fi
-    else if (trim(name) == 'dp') then
+    case('dp')
       iret = TELEM_WORD_FROM0%dp
-    else if (trim(name) == 'status') then
+    case('status')
       iret = TELEM_WORD_FROM0%status
-    else if (trim(name) == 'pi_mon') then
+    case('pi_mon')
       iret = TELEM_WORD_FROM0%pi_mon
-    else
+    case('acss')  ! The first word
+      iret = TELEM_WORD_FROM0%acss
+    case('asm1_commons')  ! The first word
+      iret = TELEM_WORD_FROM0%asm1_commons
+    case('asm2_commons')  ! The first word
+      iret = TELEM_WORD_FROM0%asm2_commons
+    case default
       iret = -999
-    end if
+    end select
 
     iret = iret + add1
   end function w_no
@@ -1047,9 +1103,9 @@ contains
     print *, '--------- asm_telem_row (', row%i_frame, ') ---------' 
     write(*,'("TIME: ",I0.2,"-",I0.2," ",I0.2,":",I0.2,":",I0.2,".",I4, "(", F0.4, ") = MJD(",F19.12,")")') &
        row%month, row%day, row%hour, row%minute, row%second, row%millisec_i4, row%second_real, row%mjd
-    write(*,'(" SF(2bit)=",I0.1," Frame(6bit)=",I0.2,' &
+    write(*,'(" SF(2bit)=",I0.1," Frame(6bit)=",I0.2,"=F",A,' &
           //'" Status=",I3,"(=",A,") DP=",I3,"(=",A,")")') &
-         row%sf_2bit, row%fr_6bit &
+         row%sf_2bit, row%fr_6bit, trim(ladjusted_int(row%FrameNum))  &
        , row%STAT_OBS, trim(char_bin_stat), row%DPID_OBS, trim(char_bin_dp)
   end subroutine dump_asm_telem_row
 
@@ -1190,10 +1246,13 @@ contains
     end select
     write(*,'(" TITLE=''",A,"'', EXTNAME=''",A,"'', TFIELDS= ",I7)') &
        trim(fhead%TITLE%val), trim(fhead%EXTNAME%val), fhead%TFIELDS%val
-    write(*,'(" TELESCOP=''",A,"'', INSTRUME=''",A,"''")') trim(fhead%TELESCOP%val), trim(fhead%INSTRUME%val)
-    write(*,'(" FILENAME= ",A," / ",A)') trim(fhead%FILENAME%val), trim(fhead%FILENAME%comment)
+    write(*,'(" TELESCOP=''",A,"'', INSTRUME=''",A,"'', SACD=",I3)') &
+       trim(fhead%TELESCOP%val), trim(fhead%INSTRUME%val), fhead%SACD%val
+    write(*,'(" FILENAME= ''",A,"'' / ",A)') trim(fhead%FILENAME%val), trim(fhead%FILENAME%comment)
+    write(*,'(" FRFFILE= ''",A,"'' / ",A)') trim(fhead%FRFFILE%val), trim(fhead%FRFFILE%comment)
     write(*,'(" ",A,"=''",A,"'' / ",A)') &
        trim(fhead%DATE__OBS%name), trim(fhead%DATE__OBS%val), trim(fhead%DATE__OBS%comment)
+    write(*,'(" PASS= ''",A,"'', TARGET1= ''",A,"''")') trim(fhead%kPASS%val), trim(fhead%TARGET1%comment)
     write(*,'("-------------------------------")')
   end subroutine dump_fits_header
 
@@ -1202,25 +1261,68 @@ contains
   function get_asmmain_row(acard) result(arret)
     implicit none
     integer(kind=1), dimension(NBYTESPERCARD), intent(in) :: acard ! == telems(1:128, i) ! Name: "a card"
-    integer, dimension(nwords_main) :: arret
+    integer, dimension(NWORDS_MAIN) :: arret
 
     integer :: idet, ich, i_tele, i_out
 
     arret = 0
-    do idet=1, num_instr  ! =6
-      do ich=1, nchan_time  ! =8
+    do idet=1, NUM_INSTR  ! =6
+      do ich=1, NCHANS_TIME  ! =8
         !i_tele = (idet-1)*2 + (ich-1)*16 + 5
-        !i_out = (idet-1)*nchan_pha + ich
+        !i_out = (idet-1)*NCHANS_PHA + ich
         !arret(i_fr64) = telems(i_tele, itotrow)
         !    
         !i_tele = (idet-1)*2 + (ich-1)*16 + 6
-        !i_out = (idet-1)*nchan_pha + ich + 8
+        !i_out = (idet-1)*NCHANS_PHA + ich + 8
         !arret(i_fr64) = telems(i_tele, itotrow)
       end do
     end do
   end function get_asmmain_row
 
+
+  ! Gets the corresponding row number of asm_telem_row%asmdats (see get_telem_raws2types() in asm_read_telemetry)
+  ! for the output column (TTYPEn).
+  !
+  ! (Table5.5.5-6 (pp.233-234))
+  ! For example,
+  !   row=1  (Y1-FW1-CH00, W4 (Wn for n=0..127, CHnn for nn=0..15, Y1/2, FW1/2)) for TTYPE=1
+  !   row=2  (Y1-FW1-CH08, W5  for TTYPE=9
+  !   row=13 (Y1-FW1-CH01, W20 for TTYPE=2
+  !
+  ! This routine gives the row number [1,2,13,...] for the column number [1,9,2,...].
+  !
+  integer function get_asmdats_row4col(index_col) result(i_asmdats)
+    implicit none
+    integer, intent(in)  :: index_col
+    integer :: ifw, iy1, ichp, icht, idiv8
+
+    integer :: idet, ich, i_tele, i_out
+
+    call split_i_ttype_asmmain(index_col, ifw, iy1, ichp, icht, idiv8)
+
+    ! ioff_vert = icht*12                        ! Vertial offset (every 12)
+    ! ioff_hori = ((ifw-1)*2+(iy1-1))*2+idiv8+1  ! Horizontal offset (after some multiple of 12)
+    i_asmdats =  icht*12 + ((ifw-1)*2+(iy1-1))*2+idiv8+1
+  end function get_asmdats_row4col
+
+  subroutine split_i_ttype_asmmain(index, ifw, iy1, ichp, icht, idiv8)
+    implicit none
+    integer, intent(in)  :: index
+    integer, intent(out) :: ifw, iy1,  ichp,    icht,   idiv8 ! (I-DIVided-by-8)
+                        ! FW1-3, Y1-2, CH00-15, CH00-07, 0-1(L-or-H in Time-mode)
+                        !        Mode: PHA      TIME (I-CHannel-Time)
+    integer :: ifwmod
+
+    ifw    =     (index-1)/(NWORDS_MAIN/3)   + 1 ! FW1--FW3
+    ifwmod = mod( index-1,  NWORDS_MAIN/3)   + 1 ! (1..32)
+    iy1    =    (ifwmod-1)/(NWORDS_MAIN/3/2) + 1 ! Y1--Y2
+    ichp   = mod(ifwmod-1,  NWORDS_MAIN/3/2)     ! CH0--CH15 for PHA-mode (0..15)
+    idiv8  =     ichp/(NCHANS_PHA/2)                  ! 0 for Ch00-07, 1 for Ch08-15 
+    icht   = mod(ichp, NCHANS_PHA/2)            ! CH0--CH07 for TIME-mode (0..7)
+  end subroutine split_i_ttype_asmmain
+
   ! Return the TTYPE string of the Main ASM data part for the given index [1:96] (eg, TTYPE5).
+  ! Table5.5.5-6 (pp.233-234)
   !
   ! Examples:
   !
@@ -1243,14 +1345,14 @@ contains
     ret = ''
 !print *,'DEBUG:632:start'
     ! Y11, Y21, Y12, Y22, Y13, Y23
-    ifw    =     (index-1)/(nwords_main/3)   + 1 ! FW1--FW3
-    ifwmod = mod( index-1,  nwords_main/3)   + 1 ! (1..32) !!!!!!!!!!! ifwmod = mod((index-1), nwords_main/3)
-    iy1    =    (ifwmod-1)/(nwords_main/3/2) + 1 ! Y1--Y2
-    ichp   = mod(ifwmod-1,  nwords_main/3/2)     ! CH0--CH15 for PHA-mode (0..15)
+    ifw    =     (index-1)/(NWORDS_MAIN/3)   + 1 ! FW1--FW3
+    ifwmod = mod( index-1,  NWORDS_MAIN/3)   + 1 ! (1..32) !!!!!!!!!!! ifwmod = mod((index-1), NWORDS_MAIN/3)
+    iy1    =    (ifwmod-1)/(NWORDS_MAIN/3/2) + 1 ! Y1--Y2
+    ichp   = mod(ifwmod-1,  NWORDS_MAIN/3/2)     ! CH0--CH15 for PHA-mode (0..15)
     low_high = 'H'
 !print *,'DEBUG:642:bef_lowh'
-    if (ichp/(nchan_pha/2) == 0) low_high = 'L'  ! else Default 'H'
-    icht   = mod(ichp,  nchan_pha/2)             ! CH0--CH07 for TIME-mode (0..7)
+    if (ichp/(NCHANS_PHA/2) == 0) low_high = 'L'  ! else Default 'H'
+    icht   = mod(ichp,  NCHANS_PHA/2)             ! CH0--CH07 for TIME-mode (0..7)
 
     if (.true.) then  ! set it .false. when memory trouble is rampant...
       write(ret, '("Y", I1, I1, "CH", I0.2, "/Y", I1, I1, A1, I0.2)') &
@@ -1485,7 +1587,7 @@ contains
     !   , 'Status_C'&
     !   , 'DP_C    '&
     !   !, 'ACS_C   '&
-    !   !, 'AMS_C   '&
+    !   !, 'ASM_C   '&
     !   !, 'bitrate ' &
     !   ]
     integer, dimension(:), allocatable :: dims  ! Array of t_form_unit%dim corresponding to ckeys
@@ -1581,7 +1683,7 @@ if (ittype > nsiz) call err_exit_play_safe()
 !!    call set_colheads_single(NWORDS_MAIN+6, 'Status_C', colheads)
 !!    call set_colheads_single(NWORDS_MAIN+7, 'DP_C',     colheads)
 !!    !call set_colheads_single(NWORDS_MAIN+8, 'ACS_C',    colheads)
-!!    !call set_colheads_single(NWORDS_MAIN+9, 'AMS_C',    colheads)
+!!    !call set_colheads_single(NWORDS_MAIN+9, 'ASM_C',    colheads)
 !    !call set_colheads_single(NWORDS_MAIN+10, 'bitrate',  colheads)
 !!print *,'DEBUG:633:here133'
 !!call dump_asm_colhead(colheads(1))
@@ -1609,7 +1711,7 @@ if (ittype > nsiz) call err_exit_play_safe()
   !  allocate( colout%fr_6bits(1, nrows) )
   !  allocate( colout%eulerss( 3, nrows) )
   !  allocate( colout%acsss(   3, nrows) )
-  !  allocate( colout%asmdatss(num_instr*nchan_pha, nrows) )
+  !  allocate( colout%asmdatss(NUM_INSTR*NCHANS_PHA, nrows) )
 
   !  colout%asmdatss( i, :) = rows(i)%asmdats
   !  colout%tstarts(  i, 1) = rows(i)%tstart

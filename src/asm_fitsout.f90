@@ -19,14 +19,14 @@ contains
 
     integer :: idet, ich, i_tele, i_out
 
-    do idet=1, num_instr  ! =6
-      do ich=1, nchan_time  ! =8
+    do idet=1, NUM_INSTR  ! =6
+      do ich=1, NCHANS_TIME  ! =8
         i_tele = (idet-1)*2 + (ich-1)*16 + 5
-        i_out = (idet-1)*nchan_pha + ich
+        i_out = (idet-1)*NCHANS_PHA + ich
         arout(isabu, i_fr64)%asmdats(i_out) = telems(itotrow, i_tele)
             
         i_tele = (idet-1)*2 + (ich-1)*16 + 6
-        i_out = (idet-1)*nchan_pha + ich + 8
+        i_out = (idet-1)*NCHANS_PHA + ich + 8
         arout(isabu, i_fr64)%asmdats(i_out) = telems(itotrow, i_tele)
       end do
     end do
@@ -508,10 +508,11 @@ contains
   !end function get_fitshead
 
   ! Output FITS header in a HDU of the ASM data FITS file
-  subroutine write_asm_fits_header(unit, fitshead, status, primary)
+  subroutine write_asm_fits_header(unit, fhd, status, primary)
     implicit none
+    character(len=*), parameter :: Subname = 'write_asm_fits_header'
     integer, intent(in) :: unit
-    type(fits_header), intent(in) :: fitshead
+    type(fits_header), intent(in) :: fhd
     integer, intent(out) :: status
     logical, intent(in), optional :: primary  ! if .true., it is for Primary header.
     logical :: is_primary
@@ -521,17 +522,29 @@ contains
       is_primary = primary
     end if
 
-    call FTPKYS(unit, 'TITLE',    fitshead%title%val,    fitshead%title%comment,    status)
-    call FTPKYS(unit, 'TELESCOP', fitshead%telescop%val, fitshead%telescop%comment, status)
-    call FTPKYS(unit, 'INSTRUME', fitshead%instrume%val, fitshead%instrume%comment, status)
-    call FTPKYS(unit, 'SACD',    fitshead%sacd%val,    fitshead%sacd%comment,    status)
-    call ftpkys(unit, 'FILENAME', fitshead%filename%val, fitshead%filename%comment, status) ! asm_comm defined in asm_fits_common
+    !call FTPKYS(unit, 'TITLE',    fhd%title%val,    fhd%title%comment,    status)
+    !call FTPKYS(unit, 'TELESCOP', fhd%telescop%val, fhd%telescop%comment, status)
+    !call FTPKYS(unit, 'INSTRUME', fhd%instrume%val, fhd%instrume%comment, status)
+    !call FTPKYS(unit, 'SACD',    fhd%sacd%val,    fhd%sacd%comment,    status)
+    !call ftpkys(unit, 'FILENAME', fhd%filename%val, fhd%filename%comment, status) ! asm_comm defined in asm_fits_common
+    call FTPKYS(unit, fhd%TELESCOP%name, fhd%TELESCOP%val, fhd%TELESCOP%comment, status)
+    call warn_ftpcl_status(status, 'ftpkys', trim(Subname)//':TELESCOP')
+    call FTPKYJ(unit, fhd%SACD%name, fhd%SACD%val, fhd%SACD%comment, status)
+    call warn_ftpcl_status(status, 'ftpkyj', trim(Subname)//':SACD')
+    call FTPKYS(unit, fhd%INSTRUME%name, fhd%INSTRUME%val, fhd%INSTRUME%comment, status)
+    call FTPKYS(unit, fhd%FILENAME%name, fhd%FILENAME%val, fhd%FILENAME%comment, status)
+    call FTPKYS(unit, fhd%FRFFILE%name, fhd%FRFFILE%val, fhd%FRFFILE%comment, status)
+    call FTPKYS(unit, fhd%kPASS%name, fhd%kPASS%val, fhd%kPASS%comment, status)
+
     if (is_primary) return
 
+    call FTPKYL(unit, fhd%EXISTDAT%name, fhd%EXISTDAT%val, fhd%EXISTDAT%comment, status)
+    call warn_ftpcl_status(status, 'ftpkyl', trim(Subname)//':EXISTDAT')
+
+    call FTPCOM(unit, OUTFTCOMMENT1, status)  ! defined in asm_fits_common
+    !call FTPHIS(unit, HISTORY1, status)  ! defined in asm_fits_common
+    
     !call FTPKYS(unit, 'TITLE',    fitshead%title,    asm_comm%title,    status)
-    !call FTPKYS(unit, 'TELESCOP', fitshead%telescop, asm_comm%telescop, status)
-    !call FTPKYS(unit, 'INSTRUME', fitshead%instrume, asm_comm%instrume, status)
-    !call ftpkys(unit, 'FILENAME', fitshead%filename, asm_comm%filename, status) ! asm_comm defined in asm_fits_common
     !!call FTPKY[JKLS](funit, 'date', '????', '[day] Creation date of this file', status)
     ! .........
   end subroutine write_asm_fits_header
@@ -576,6 +589,18 @@ print *,'DEBUG:042:b3ftart-out, status=',status
     call ftfiou(unit, status)
   end subroutine write_tmp_fits
 
+  ! Warn if failing in writing a column
+  subroutine warn_ftpcl_status(status, funcname, kwd)
+    integer, intent(in) :: status
+    character(len=*), intent(in) :: funcname, kwd
+    character(len=30) :: errtext ! for FITS error to receive
+
+    if (status .ne. 0) then
+      call FTGERR(status, errtext)
+      write(stderr,'("ERROR: (",A,") Failed in ",A,"() with status=", I12,": ",A)') &
+         trim(kwd), trim(funcname), status, trim(errtext)
+    end if
+  end subroutine warn_ftpcl_status
 
   ! Output FITS file of the ASM data
   subroutine write_cols(unit, trows, relrows, colheads, status)
@@ -586,12 +611,14 @@ print *,'DEBUG:042:b3ftart-out, status=',status
     type(asm_sfrow), dimension(:), intent(in) :: relrows
     type(t_asm_colhead), dimension(:), allocatable, intent(in) :: colheads
     integer, intent(out) :: status
-    integer :: i, ikind, ittype, iprm, itrow, iframe, irelrow, iout, iend, naxis2, ntrows, nrelrows
-    character(len=30) :: errtext
+    integer :: i, ikind, ittype, iprm, itrow, iframe, irelrow, iout, iend, iasm, naxis2, ntrows, nrelrows, kval
+    character(len=30) :: errtext ! for FITS error to receive
+    character(len=1024) :: usermsg  ! for humans
     character(len=LEN_READABLE_KEY) :: ckey
     real(dp8), dimension(:), allocatable :: cold
     integer, dimension(:), allocatable :: colj
     integer(kind=2), dimension(:), allocatable :: coli
+    character(len=8), dimension(:), allocatable :: cols8
 
     naxis2 = sum(relrows%nframes, relrows%is_valid)  ! Number of valid frames.
     ntrows   = size(trows)
@@ -600,14 +627,22 @@ print *,'DEBUG:042:b3ftart-out, status=',status
     allocate(coli(naxis2))
     allocate(colj(naxis2))
     allocate(cold(naxis2))
+    allocate(cols8(naxis2))
 
 print *,'DEBUG:2433'
 call dump_type(relrows(3), 3)
 !FTPCL[SLBIJKEDCM](unit,colnum,frow,felem,nelements,values, > status) ! frow: 1st row?, felem: 1st element?
 
+print *,'DEBUG:2439-6:'
+call dump_type(colheads(6))
+print *,'DEBUG:2439-7:'
+call dump_type(colheads(7))
+print *,'DEBUG:2439-8:'
+call dump_type(colheads(8))
     status = 0 
     iframe = 0 
     ittype = 0  ! TTYPEn
+    iasm = 0    ! The i-th number of the main ASM data (should be repeated NWORDS_MAIN=96 times)
     ! do ikind=1, size(COL_FORM_UNITS)
     do ikind=1, size(colheads)
 !do ikind=2, 4  ! Index in COL_FORM_UNITS
@@ -615,9 +650,40 @@ call dump_type(relrows(3), 3)
       iend = 0
 !ckey = COL_FORM_UNITS(ikind)%key
       ckey = colheads(ikind)%key 
+if (trim(ckey) .ne. 'main') then
 print *,'DEBUG:2010:ikind=',ikind, ' ckey=', trim(ckey)
+end if
       select case(trim(ckey))
-      case('main')
+      case('main')  ! Main ASM data (96 cells)
+        iasm = iasm + 1
+        if (iasm > NWORDS_MAIN) call err_exit_play_safe("ASM more than 96 times repeated.")  ! sanity check
+        iout = 0  ! Row number of each output Column
+        coli(:) = 0
+        do irelrow=1, nrelrows  ! Each relrow (=asm_sfrow) number
+          if (.not. relrows(irelrow)%is_valid) cycle
+          do itrow=relrows(irelrow)%irowt, relrows(irelrow)%irowt + relrows(irelrow)%nframes - 1  ! Telemetry Row number
+            iout = iout + 1
+            if (iout > naxis2) then  ! sanity check
+              write(usermsg, '("strange with iout=",I6," <=> ",I6,"(max)")') iout, naxis2
+              call err_exit_with_msg(usermsg)
+            end if
+            kval = trows(itrow)%asmdats(get_asmdats_row4col(iasm))
+            if ((kval < 0) .or. (255 < kval)) then  ! sanity check; this should never happen.
+              write(usermsg, '("ASM-data out of range =",I12," iasm=",I2," asmdats_row=",I2," ttype=",A)') &
+                 kval, iasm, get_asmdats_row4col(iasm), trim(get_ttype_main(iasm))
+              call err_exit_with_msg(usermsg)
+            end if
+            coli(iout) = int(kval, kind=2)
+          end do
+        end do
+        ittype = ittype + 1
+        call FTPCLI(unit, ittype, 1, 1, naxis2, coli, status)  ! colnum = 1
+if (status .ne. 0) then !DEBUG
+  print *,'DEBUG:2042: iasm=',iasm,' ittype=',ittype
+end if
+        call warn_ftpcl_status(status, 'FTPCLI', ckey)
+        call modify_ttype_comment(unit, ittype, ckey, status)
+
       case('Tstart')
         cold(:) = 0.0d0
         do irelrow=1, nrelrows  ! Each relrow (=asm_sfrow) number
@@ -625,24 +691,25 @@ print *,'DEBUG:2010:ikind=',ikind, ' ckey=', trim(ckey)
           do itrow=relrows(irelrow)%irowt, relrows(irelrow)%irowt + relrows(irelrow)%nframes - 1  ! Telemetry Row number
             iout = iout + 1
             if (iout > naxis2) then  ! sanity check
-              write(stderr, '("ERROR: strange with iout=",I6," <=> ",I6,"(max)")') iout, naxis2
-              call EXIT(1)
+              write(usermsg, '("strange with iout=",I6," <=> ",I6,"(max)")') iout, naxis2
+              call err_exit_with_msg(usermsg)
             end if
             cold(iout) = trows(itrow)%mjd 
           end do
         end do
         ittype = ittype + 1  ! FITS Table column number
-print *,'DEBUG:2310:ikind=',ikind, ' ittype=', ittype 
+print *,'DEBUG:2310:ikind=',ikind, ' ittype=', ittype,' nelements=naxis2=',naxis2,' size(cold)=',size(cold)
         call FTPCLD(unit, ittype, 1, 1, naxis2, cold, status)  ! colnum = 1
-        if (status .ne. 0) then
-          call FTGERR(status, errtext)
-          write(stderr,'("ERROR: Failed in FTPCLD() with status=", I12,": ",A)') status, trim(errtext)
-        end if
+        call warn_ftpcl_status(status, 'FTPCLD', ckey)
         call modify_ttype_comment(unit, ittype, ckey, status)
 
         print *,'DEBUG:234:fds=',cold(5:8)
-      case('Euler')   
-        do iprm=1, 3
+
+      case('Euler')
+        ! All frames in the same SF have a common value.
+        ! In practice, Euler can never be determined because no FRFs match where ASM-Mode is ON.
+        iprm = get_colhead_type_num(colheads(ikind), 'Euler')
+        !do iprm=1, 3
           cold(:) = 0.0d0
           iout = 0
           iend = 0
@@ -669,17 +736,15 @@ end if
 print *,'DEBUG:2410:ikind=',ikind, ' ittype=', ittype , ' iprm=',iprm
           call FTPCLD(unit, ittype, 1, 1, naxis2, cold, status)  ! colnum = 1
 ! print *,'DEBUG:430:ittype=',ittype,' iout=',iout,' naxis2=',naxis2,' cold(3)=',cold(66)
-          if (status .ne. 0) then
-            call FTGERR(status, errtext)
-            write(stderr,'("ERROR: Failed in FTPCLD() with status=", I12,": ",A)') status, trim(errtext)
-          end if
+          call warn_ftpcl_status(status, 'FTPCLD', ckey)
           call modify_ttype_comment(unit, ittype, ckey, status)
 
 !print *,'DEBUG:334:euler',iprm,'=',cold(63:65)
-        end do
+        !end do
 !print *,'DEBUG:332:irowf(2)=',relrows(2)%irowf
 
-      case('SFNum')   
+      case('SFNum')
+        ! Integer*4 columns based on the SF
         do iprm=1, 1
           colj(:) = 0
           iout = 0
@@ -692,7 +757,7 @@ print *,'DEBUG:2510:nrelrows=',nrelrows, ' ittype=', ittype
             if (iend > naxis2) then  ! sanity check
               write(stderr, '("ERROR: strange (in sfn) with iout=",I6," <=> ",I6,"(max) when SFrow=",I5,"/",I5)') &
                  iend, naxis2, irelrow, nrelrows
-              call EXIT(1)
+              call err_exit_play_safe()
             end if
             !colj(iout:iend) = frfrows(relrows(irelrow)%irowf)%eulers(iprm, 1)
             colj(iout:iend) = relrows(irelrow)%frf%sfn
@@ -706,10 +771,7 @@ end if
           ittype = ittype + 1  ! FITS Table column number
 print *,'DEBUG:2540:FTPCLJ:nrelrows=',nrelrows, ' ittype=', ittype 
           call FTPCLJ(unit, ittype, 1, 1, naxis2, colj, status)  ! colnum = 1
-          if (status .ne. 0) then
-            call FTGERR(status, errtext)
-            write(stderr,'("ERROR: (sfn) Failed in FTPCLJ() with status=", I12,": ",A)') status, trim(errtext)
-          end if
+          call warn_ftpcl_status(status, 'FTPCLJ', ckey)
           call modify_ttype_comment(unit, ittype, ckey, status)
           ! call FTSNUL(unit,colnum,snull > status) ! Define string representation for NULL column
           ! call FTTNUL(unit,colnum,tnull > status) ! Define the integer(!) value to be treated as NULL
@@ -752,18 +814,124 @@ call dump_type(relrows(5))
           end do
           ittype = ittype + 1  ! FITS Table column number
           call FTPCLI(unit, ittype, 1, 1, naxis2, coli, status)  ! colnum = 1
-          if (status .ne. 0) then
-            call FTGERR(status, errtext)
-            write(stderr,'("ERROR: (in mode) Failed in FTPCLI() with status=", I12,": ",A)') status, trim(errtext)
-          end if
+          call warn_ftpcl_status(status, 'FTPCLI', ckey)
           call modify_ttype_comment(unit, ittype, ckey, status)
           ! call FTSNUL(unit,colnum,snull > status) ! Define string representation for NULL column
           ! call FTTNUL(unit,colnum,tnull > status) ! Define the integer(!) value to be treated as NULL
         end do
-      case('Status_C')
-      case('DP_C')    
-      case('ACS_C')   
-      case('AMS_C')   
+
+      case('Fr6bits', 'FrameNum', 'Status_C', 'DP_C')    
+        ! Integer*2, frame-based
+        coli(:) = 0
+        do irelrow=1, nrelrows  ! Each relrow (=asm_sfrow) number
+          if (.not. relrows(irelrow)%is_valid) cycle
+          do itrow=relrows(irelrow)%irowt, relrows(irelrow)%irowt + relrows(irelrow)%nframes - 1  ! Telemetry Row number
+            iout = iout + 1
+            if (iout > naxis2) then  ! sanity check
+              write(usermsg, '("strange with iout=",I6," <=> ",I6,"(max)")') iout, naxis2
+              call err_exit_with_msg(usermsg)
+            end if
+            select case(trim(ckey))
+            case('Fr6bits')
+              coli(iout) = int(trows(itrow)%fr_6bit, kind=2)
+            case('FrameNum')
+              coli(iout) = int(trows(itrow)%FrameNum, kind=2)
+            case('Status_C')    
+              coli(iout) = int(trows(itrow)%STAT_OBS, kind=2)
+            case('DP_C')    
+              coli(iout) = int(trows(itrow)%DPID_OBS, kind=2)
+            case default
+              call err_exit_play_safe('Integer*2 part') ! should never happen
+            end select
+          end do
+        end do
+        ittype = ittype + 1  ! FITS Table column number
+!print *,'DEBUG:2340:ikind=',ikind, ' ittype=', ittype,' nelements=naxis2=',naxis2,' size(coli)=',size(coli)
+        call FTPCLI(unit, ittype, 1, 1, naxis2, coli, status)  ! colnum = 1
+        call warn_ftpcl_status(status, 'FTPCLI', ckey)
+        call modify_ttype_comment(unit, ittype, ckey, status)
+
+      case('Status_S', 'DP_S')    
+        ! Character*8, frame-based
+        cols8(:) = ''
+        do irelrow=1, nrelrows  ! Each relrow (=asm_sfrow) number
+          if (.not. relrows(irelrow)%is_valid) cycle
+          do itrow=relrows(irelrow)%irowt, relrows(irelrow)%irowt + relrows(irelrow)%nframes - 1  ! Telemetry Row number
+            iout = iout + 1
+            if (iout > naxis2) then  ! sanity check
+              write(usermsg, '("strange with iout=",I6," <=> ",I6,"(max)")') iout, naxis2
+              call err_exit_with_msg(usermsg)
+            end if
+            select case(trim(ckey))
+            case('Status_S')
+              cols8(iout) = trows(itrow)%STAT_OBS_B8
+            case('DP_S')
+              cols8(iout) = trows(itrow)%DPID_OBS_B8
+            case default
+              call err_exit_play_safe('Chracter*8 part') ! should never happen
+            end select
+          end do
+        end do
+        ittype = ittype + 1  ! FITS Table column number
+!print *,'DEBUG:2340:ikind=',ikind, ' ittype=', ittype,' nelements=naxis2=',naxis2,' size(cols8)=',size(cols8)
+        call FTPCLS(unit, ittype, 1, 1, naxis2, cols8, status)
+        call warn_ftpcl_status(status, 'FTPCLS', ckey)
+        call modify_ttype_comment(unit, ittype, ckey, status)
+
+      case('i_frame')    
+        ! Integer*4, frame-based
+        colj(:) = 0
+        do irelrow=1, nrelrows  ! Each relrow (=asm_sfrow) number
+          if (.not. relrows(irelrow)%is_valid) cycle
+          do itrow=relrows(irelrow)%irowt, relrows(irelrow)%irowt + relrows(irelrow)%nframes - 1  ! Telemetry Row number
+            iout = iout + 1
+            if (iout > naxis2) then  ! sanity check
+              write(usermsg, '("strange with iout=",I6," <=> ",I6,"(max)")') iout, naxis2
+              call err_exit_with_msg(usermsg)
+            end if
+            select case(trim(ckey))
+            case('i_frame')    
+              colj(iout) = trows(itrow)%i_frame
+            case default
+              call err_exit_play_safe('Integer*4 part') ! should never happen
+            end select
+          end do
+        end do
+        ittype = ittype + 1  ! FITS Table column number
+        call FTPCLJ(unit, ittype, 1, 1, naxis2, colj, status)  ! colnum = 1
+        call warn_ftpcl_status(status, 'FTPCLJ', ckey)
+        call modify_ttype_comment(unit, ittype, ckey, status)
+
+      case('ACS_C', 'ASM1_C', 'ASM2_C')   
+        ! Integer*2 columns (multiple)
+        iprm = get_colhead_type_num(colheads(ikind), trim(ckey))
+        do irelrow=1, nrelrows  ! Each relrow (=asm_sfrow) number
+          if (.not. relrows(irelrow)%is_valid) cycle
+          do itrow=relrows(irelrow)%irowt, relrows(irelrow)%irowt + relrows(irelrow)%nframes - 1  ! Telemetry Row number
+            iout = iout + 1
+            if (iout > naxis2) then  ! sanity check
+              write(usermsg, '("strange with iout=",I6," <=> ",I6,"(max)")') iout, naxis2
+              call err_exit_with_msg(usermsg)
+            end if
+            select case(trim(ckey))
+            case('ACS_C')   
+              coli(iout) = int(trows(itrow)%acss(iprm), kind=2)
+            case('ASM1_C')   
+              coli(iout) = int(trows(itrow)%asm1_commons(iprm), kind=2)
+            case('ASM2_C')   
+              coli(iout) = int(trows(itrow)%asm2_commons(iprm), kind=2)
+            case default
+              call err_exit_play_safe('Integer*2 part') ! should never happen
+            end select
+          end do
+        end do
+        ittype = ittype + 1  ! FITS Table column number
+        call FTPCLI(unit, ittype, 1, 1, naxis2, coli, status)
+        call warn_ftpcl_status(status, 'FTPCLI', ckey)
+        call modify_ttype_comment(unit, ittype, ckey, status)
+
+!      case('ASM_C1', 'ASM_C2')   
+!ittype = ittype + 1
       case default
         call err_exit_with_msg('Parameter '//trim(ckey)//' is not yet taken into account.')
       end select
@@ -777,10 +945,11 @@ call dump_type(relrows(5))
   subroutine write_asm_evt_fits(outfil, fhead, trows, relrows, status, outcolkeys)
     implicit none
     integer, parameter :: MY_FUNIT = 159  ! arbitrary
-    character(len=*), parameter :: extname = 'ASM table'
+    character(len=*), parameter :: Subname = 'write_asm_evt_fits'
+    character(len=*), parameter :: Extname = 'ASM table'
 
     character(len=*), intent(in) :: outfil
-    type(fits_header), intent(in) :: fhead  ! Mainly for 1st-Extension header
+    type(fits_header), intent(inout) :: fhead  ! Mainly for 1st-Extension header. EXISTDAT is written.
     type(asm_telem_row), dimension(:), intent(in) :: trows
     !type(asm_frfrow), dimension(:), intent(in) :: frfrows
     type(asm_sfrow), dimension(:), intent(in) :: relrows
@@ -854,8 +1023,9 @@ print *,'DEBUG:0010: test-open1-status=',status,' / HDU=',nhdu,' / ',trim(errtex
     extend=.true.
     ! write the required (Primary) header keywords
     call ftphpr(unit, simple, bitpix, 0, naxes, 0, 1, extend, status) ! Because naxis=0, naxes is ignored.
-    ! write another optional keyword to the header
-call ftpkyj(unit,'EXPOSURE',1500,'Total Exposure Time',status)  ! DEBUG
+    ! write other optional keywords to the header
+    call write_asm_fits_header(unit, fhead, status, primary=.true.)
+!call ftpkyj(unit,'EXPOSURE',1500,'Total Exposure Time',status)  ! DEBUG
     
     ! Extension
     
@@ -865,22 +1035,26 @@ call ftpkyj(unit,'EXPOSURE',1500,'Total Exposure Time',status)  ! DEBUG
     ttypes = colheads%type
     tforms = colheads%prm%form
     tunits = colheads%prm%unit
-    !call FTIBIN(unit,nrows,tfields,ttype,tform,tunit,extname,varidat > status) ! nrows should be 0 ! FiTs-Insert-BINary-table
+    !call FTIBIN(unit,nrows,tfields,ttype,tform,tunit,Extname,varidat > status) ! nrows should be 0 ! FiTs-Insert-BINary-table
     !call FTIBIN(unit,0,2,ttypes,tforms,tunits,'TestBinExt',.true., status) ! Creates an extension with basic header and moves to it.
     !call FTIBIN(unit, 0, size(ttypes) &
 print *,'DEBUG:0030: size(tforms)=TFIELDS=',size(tforms)
     call FTIBIN(unit, 0, size(tforms) &
-              , ttypes, tforms, tunits, extname, .true., status) ! Creates an extension with basic header and moves to it.
-    if (status .ne. 0) then
-      call FTGERR(status, errtext)
-      write(stderr,'("ERROR: Failed in FTIBIN() with status=", I12,": ",A)') status, trim(errtext)
-    end if
+              , ttypes, tforms, tunits, Extname, .true., status) ! Creates an extension with basic header and moves to it.
+    call warn_ftpcl_status(status, 'FTIBIN', Subname)
+if (size(tforms) > 96) then
+print *,'DEBUG:0032:tforms(97)=',trim(tforms(97))
+end if
 
 call FTGHDN(unit, nhdu)
 call FTGERR(status, errtext)
 print *,'test-new-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
-call ftpkys(unit,'MY_HEAD','Arbitrary','My comment 01',status)
-    
+
+    ! Whether the file contains the data.  (NOTE: it is not written in the variable, but in the file only.)
+    fhead%EXISTDAT%val = any(relrows%is_valid)
+
+    call write_asm_fits_header(unit, fhead, status, primary=.false.)
+
     call write_cols(unit, trows, relrows, colheads, status)  !!!!!!!!!!!!!!!
 
 !    ! Write Table (double precision)
@@ -920,7 +1094,7 @@ call ftpkys(unit,'MY_HEAD','Arbitrary','My comment 01',status)
   ! Output FITS file of the ASM data
   subroutine write_asm_fits(fname, fitshead, trows, frfrows, relrows, status)
     implicit none
-    character(len=*), parameter :: extname = 'ASM table'
+    character(len=*), parameter :: Extname = 'ASM table'
 
     character(len=*), intent(in) :: fname
     type(fits_header), intent(in) :: fitshead  ! Mainly for 1st-Extension header
@@ -985,9 +1159,9 @@ print *,'DEBUG:write-open1-status=',status,' / HDU=',nhdu,' / ',trim(errtext)
     tunits(1) = 'sec'
     tunits(2) = ''
 
-    !call FTIBIN(unit,nrows,tfields,ttype,tform,tunit,extname,varidat > status) ! nrows should be 0 ! FiTs-Insert-BINary-table
+    !call FTIBIN(unit,nrows,tfields,ttype,tform,tunit,Extname,varidat > status) ! nrows should be 0 ! FiTs-Insert-BINary-table
     call FTIBIN(unit, 0, size(ttypes) &
-              , ttypes, tforms, tunits, extname, .true., status) ! Creates an extension with basic header and moves to it.
+              , ttypes, tforms, tunits, Extname, .true., status) ! Creates an extension with basic header and moves to it.
     ! Status check...
     call FTGHDN(unit, nhdu)
     call FTGERR(status, errtext)
@@ -1016,113 +1190,113 @@ print *,'DEBUG: char-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)  ! If wrong
   end subroutine write_asm_fits
 
 
-  ! SF-based old style
-  subroutine out_asm_fits_old(fname, fitshead, ardata, nrows)
-    character(len=*), intent(in) :: fname
-    type(asm_header), dimension(:), intent(in) :: fitshead  ! (iSabuFrame), None for primary header
-    type(asm_telem_row),  dimension(:, :), intent(in) :: ardata ! (iSabuFrame, Row)
-    integer,          dimension(:), intent(in) :: nrows     ! Number-of-significant-rows(iSabuFrame)
-
-    !type(asm_header_comment) :: hcomm
-    integer(kind=1),  dimension(maxval(nrows)) :: aryi
-    integer,          dimension(maxval(nrows)) :: aryj
-    real,             dimension(maxval(nrows)) :: arye
-    character(len=max_fits_char), dimension(maxval(nrows)) :: arys
-
-    character(len=1024) :: errmsg
-    character(len=80) :: comment = '', keyword, snull, msg
-    integer :: funit, status=-999, blocksize, hdutype, nframes, naxis1
-    integer :: isabu, varidat, felem
-    integer :: i, j, ini
-    character(len=max_fits_char), dimension(tfields_asm) :: ttypes, tforms, tunits
-
-    call ftgiou(funit, status)
-    if (status .ne. 0) then
-      print *, 'DEBUG23: funit=', funit
-      funit = 177
-    !  errmsg = 'Failed to get a safe file unit to output file: ' // trim(fname)
-    !  call err_exit_if_status(status, errmsg) ! in Module err_exit
-    !  stop  ! redundant
-    end if
-
-    !--------- Test
-    call ftopen(399, '/home/parallels/try0.fits', 1, blocksize, status)
-    call FTPKYS(399, 'title', 'ASM extracted data', '', status)
-    call FTPKYS(399, 'filename', '/home/parallels/try0.fits', status)
-    call ftclos(399, status)
-    !---------
-
-    !call ftopen(funit, fname, 1, blocksize, status)
-    call ftinit(funit, fname, blocksize, status)
-    if (status .ne. 0) then
-      print *, 'DEBUG24: funit=', funit
-    end if
-    !  errmsg = 'Failed to open the output file: ' // trim(fname)
-    !  call err_exit_if_status(status, errmsg) ! in Module err_exit
-    !  stop  ! redundant
-    !end if
-
-    call FTPKYS(funit, 'title', 'ASM extracted data', '', status)
-    !call FTPKY[JKLS](funit, 'date', '????', '[day] Creation date of this file', status)
-    call FTPKYS(funit, 'telescop', 'Ginga', '', status)
-    call FTPKYS(funit, 'instrume', 'ASM', '', status)
-    call FTPKYS(funit, 'filename', trim(fname), 'Original filename', status)
-
-print *, 'DEBUG25: '
-    !call get_ttypes(ttypes)
-    !call get_tforms(tforms)
-    !call get_tunits(tunits)
-
-print *, 'DEBUG26: size(fitshead)=', size(fitshead)
-
-    do isabu=1, size(fitshead)
-      call FTIBIN(funit, nrows(isabu), tfields_asm, ttypes, tforms, tunits, get_extname(isabu), varidat, status) ! tfields_asm defined in asm_fits_common
-write (*, '("DEBUG27: nrows(",i12,")=",i15)') isabu,nrows(isabu)
-
-      !call FTMAHD(funit, isabu+1, hdutype, status)           ! Move to the next extention
-      call FTPKYS(funit, 'telescop', 'Ginga', '', status)
-      call FTPKYS(funit, 'instrume', 'ASM', '', status)
-
-      !! Write elements into an ASCII or binary table column. The ‘felem’ parameter applies only to vector columns in binary tables and is ignored when writing to ASCII tables.
-      ini = 1  ! column number
-      arye(:) = 0
-      do i=1, nrows(isabu)
-        arye(i) = ardata(isabu, i)%tstart
-      end do
-      call FTPCLE(funit, 1, ini, 1, 1, nrows(isabu), arye, status)
-
-print *, 'DEBUG28: '
-
-      do j=1, 3  ! 3-dimensions
-        arye(:) = 0
-        do i=1, nrows(isabu)
-          arye(i) = ardata(isabu, i)%eulers(j)
-        end do
-        call FTPCLE(funit, 1, ini+j, 1, 1, nrows(isabu), arye, status)
-
-        arye(:) = 0
-        do i=1, nrows(isabu)
-          arye(i) = ardata(isabu, i)%angles_intn(j)
-        end do
-        call FTPCLE(funit, 1, ini+3+j, 1, 1, nrows(isabu), arye, status)
-      end do
-
-print *, 'DEBUG38: '
-      !!!!! tfields must increase by 3 to take this into account
-      !! integer(kind=1), dimension(3) :: acss;      ! acss = 3 bytes
-      
-      do j=1, num_instr*nchan_pha  ! ==96
-        aryi(:) = 0
-        do i=1, nrows(isabu)
-          aryi(i) = ardata(isabu, i)%asmdats(j)
-        end do
-        call FTPCLE(funit, 1, ini+3*2+j, 1, 1, nrows(isabu), aryi, status)
-      end do
-print *, 'DEBUG48: '
-    end do
-
-    call ftclos(funit, status)
-    call ftfiou(funit, status)
-  end subroutine out_asm_fits_old
+!  ! SF-based old style
+!  subroutine out_asm_fits_old(fname, fitshead, ardata, nrows)
+!    character(len=*), intent(in) :: fname
+!    type(asm_header), dimension(:), intent(in) :: fitshead  ! (iSabuFrame), None for primary header
+!    type(asm_telem_row),  dimension(:, :), intent(in) :: ardata ! (iSabuFrame, Row)
+!    integer,          dimension(:), intent(in) :: nrows     ! Number-of-significant-rows(iSabuFrame)
+!
+!    !type(asm_header_comment) :: hcomm
+!    integer(kind=1),  dimension(maxval(nrows)) :: aryi
+!    integer,          dimension(maxval(nrows)) :: aryj
+!    real,             dimension(maxval(nrows)) :: arye
+!    character(len=max_fits_char), dimension(maxval(nrows)) :: arys
+!
+!    character(len=1024) :: errmsg
+!    character(len=80) :: comment = '', keyword, snull, msg
+!    integer :: funit, status=-999, blocksize, hdutype, nframes, naxis1
+!    integer :: isabu, varidat, felem
+!    integer :: i, j, ini
+!    character(len=max_fits_char), dimension(tfields_asm) :: ttypes, tforms, tunits
+!
+!    call ftgiou(funit, status)
+!    if (status .ne. 0) then
+!      print *, 'DEBUG23: funit=', funit
+!      funit = 177
+!    !  errmsg = 'Failed to get a safe file unit to output file: ' // trim(fname)
+!    !  call err_exit_if_status(status, errmsg) ! in Module err_exit
+!    !  stop  ! redundant
+!    end if
+!
+!    !--------- Test
+!    call ftopen(399, '/home/parallels/try0.fits', 1, blocksize, status)
+!    call FTPKYS(399, 'title', 'ASM extracted data', '', status)
+!    call FTPKYS(399, 'filename', '/home/parallels/try0.fits', status)
+!    call ftclos(399, status)
+!    !---------
+!
+!    !call ftopen(funit, fname, 1, blocksize, status)
+!    call ftinit(funit, fname, blocksize, status)
+!    if (status .ne. 0) then
+!      print *, 'DEBUG24: funit=', funit
+!    end if
+!    !  errmsg = 'Failed to open the output file: ' // trim(fname)
+!    !  call err_exit_if_status(status, errmsg) ! in Module err_exit
+!    !  stop  ! redundant
+!    !end if
+!
+!    call FTPKYS(funit, 'title', 'ASM extracted data', '', status)
+!    !call FTPKY[JKLS](funit, 'date', '????', '[day] Creation date of this file', status)
+!    call FTPKYS(funit, 'telescop', 'Ginga', '', status)
+!    call FTPKYS(funit, 'instrume', 'ASM', '', status)
+!    call FTPKYS(funit, 'filename', trim(fname), 'Original filename', status)
+!
+!print *, 'DEBUG25: '
+!    !call get_ttypes(ttypes)
+!    !call get_tforms(tforms)
+!    !call get_tunits(tunits)
+!
+!print *, 'DEBUG26: size(fitshead)=', size(fitshead)
+!
+!    do isabu=1, size(fitshead)
+!      call FTIBIN(funit, nrows(isabu), tfields_asm, ttypes, tforms, tunits, get_extname(isabu), varidat, status) ! tfields_asm defined in asm_fits_common
+!write (*, '("DEBUG27: nrows(",i12,")=",i15)') isabu,nrows(isabu)
+!
+!      !call FTMAHD(funit, isabu+1, hdutype, status)           ! Move to the next extention
+!      call FTPKYS(funit, 'telescop', 'Ginga', '', status)
+!      call FTPKYS(funit, 'instrume', 'ASM', '', status)
+!
+!      !! Write elements into an ASCII or binary table column. The ‘felem’ parameter applies only to vector columns in binary tables and is ignored when writing to ASCII tables.
+!      ini = 1  ! column number
+!      arye(:) = 0
+!      do i=1, nrows(isabu)
+!        arye(i) = ardata(isabu, i)%tstart
+!      end do
+!      call FTPCLE(funit, 1, ini, 1, 1, nrows(isabu), arye, status)
+!
+!print *, 'DEBUG28: '
+!
+!      do j=1, 3  ! 3-dimensions
+!        arye(:) = 0
+!        do i=1, nrows(isabu)
+!          arye(i) = ardata(isabu, i)%eulers(j)
+!        end do
+!        call FTPCLE(funit, 1, ini+j, 1, 1, nrows(isabu), arye, status)
+!
+!        arye(:) = 0
+!        do i=1, nrows(isabu)
+!          arye(i) = ardata(isabu, i)%angles_intn(j)
+!        end do
+!        call FTPCLE(funit, 1, ini+3+j, 1, 1, nrows(isabu), arye, status)
+!      end do
+!
+!print *, 'DEBUG38: '
+!      !!!!! tfields must increase by 3 to take this into account
+!      !! integer(kind=1), dimension(3) :: acss;      ! acss = 3 bytes
+!      
+!      do j=1, NUM_INSTR*NCHANS_PHA  ! ==96
+!        aryi(:) = 0
+!        do i=1, nrows(isabu)
+!          aryi(i) = ardata(isabu, i)%asmdats(j)
+!        end do
+!        call FTPCLE(funit, 1, ini+3*2+j, 1, 1, nrows(isabu), aryi, status)
+!      end do
+!print *, 'DEBUG48: '
+!    end do
+!
+!    call ftclos(funit, status)
+!    call ftfiou(funit, status)
+!  end subroutine out_asm_fits_old
 end module asm_fitsout
 

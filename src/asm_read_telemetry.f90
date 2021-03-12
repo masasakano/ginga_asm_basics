@@ -46,6 +46,16 @@ contains
     end if
   end function get_safe_unit
 
+  function get_merged_head(tfhead, frfhead) result(rethead)
+    type(fits_header), intent(in) :: tfhead, frfhead
+    type(fits_header) :: rethead
+
+    rethead = tfhead
+    rethead%FRFFILE%val = trim(frfhead%FRFFILE%val)
+    rethead%kPASS%val = trim(frfhead%kPASS%val)
+    rethead%TARGET1%val = trim(frfhead%TARGET1%val)
+    rethead%TARGET2%val = trim(frfhead%TARGET2%val)
+  end function get_merged_head
 
   ! Make and get fits_header and asm_telem_row of the telemetry from File
   !
@@ -197,13 +207,19 @@ contains
     ! Get some other header data
     ! Type: String
     call ftgkys(funit, fhead%EXTNAME%name,  fhead%EXTNAME%val,  fhead%EXTNAME%comment,  status)
-    call ftgkys(funit, fhead%SACD%name,     fhead%SACD%val,     fhead%SACD%comment,     status)
+    call ftgkys(funit, fhead%TELESCOP%name, fhead%TELESCOP%val, fhead%TELESCOP%comment, status)
     ! Type: Integer
+    call ftgkyj(funit, fhead%SACD%name,     fhead%SACD%val,     fhead%SACD%comment,     status)
     call ftgkyj(funit, fhead%D_STA_C1%name, fhead%D_STA_C1%val, fhead%D_STA_C1%comment, status)
     call ftgkyj(funit, fhead%D_STA_C2%name, fhead%D_STA_C2%val, fhead%D_STA_C2%comment, status)
     call ftgkyj(funit, fhead%D_END_C1%name, fhead%D_END_C1%val, fhead%D_END_C1%comment, status)
     call ftgkyj(funit, fhead%D_END_C2%name, fhead%D_END_C2%val, fhead%D_END_C2%comment, status)
 
+    fhead%INSTRUME%val = 'ASM'
+    fhead%FILENAME%val = trim(basename(fname))
+
+print *,'DEBUG:9232: fhead:'
+call dump_type(fhead, 1) !! DEBUG
     naxes = (/ (-999, i = 1, size(naxes)) /)
     ! FiTs_Get_Table_DiMension
     call FTGTDM(funit, 1, maxaxes, num_axis, naxes, status)
@@ -262,8 +278,9 @@ contains
     integer(kind=1), dimension(:, :), allocatable, intent(in) :: headers, telems ! (word(=byte), row)
     type(asm_telem_row), dimension(size(headers, 2)) :: retrows
     
-    integer :: irow
+    integer :: irow, i, j, k
     integer(kind=1) :: sf4, fr64
+    character(len=8) :: s8
 
     do irow=1, size(headers, 2) !unsigned1_to_int4() defined in fort_util
       retrows(irow)%month      = unsigned1_to_int4(headers(1, irow)) ! Byte00
@@ -292,15 +309,51 @@ contains
 
       retrows(irow)%i_frame = irow
 
-      retrows(irow)%w_fi     = unsigned1_to_int4(telems(w_no('fi',     from1=.true.), irow)) ! defined in fort_util and asm_fits_common
+      retrows(irow)%w_fi     = unsigned1_to_int4(telems(w_no('fi',     from1=.true.), irow)) ! W3, namely "FI"; defined in fort_util and asm_fits_common
       retrows(irow)%STAT_OBS = unsigned1_to_int4(telems(w_no('status', from1=.true.), irow))
       retrows(irow)%DPID_OBS = unsigned1_to_int4(telems(w_no('dp',     from1=.true.), irow))
       retrows(irow)%pi_mon   = unsigned1_to_int4(telems(w_no('pi_mon', from1=.true.), irow))
+
+      write(s8, '(B8.8)') retrows(irow)%STAT_OBS 
+      retrows(irow)%STAT_OBS_B8 = s8
+      write(s8, '(B8.8)') retrows(irow)%DPID_OBS 
+      retrows(irow)%DPID_OBS_B8 = s8
 
       ! Get 2-bit SF number and 6-bit Frame number from the Telemetry 16-byte header.
       call get_sf4_fr64(irow, telems, sf4, fr64)
       retrows(irow)%sf_2bit = sf4
       retrows(irow)%fr_6bit = fr64
+      retrows(irow)%FrameNum = fr64 + 1
+
+      ! Array data for ACS and ASM-in-the-common (2 parts)
+      j = w_no('pi_mon', from1=.true.)
+      retrows(irow)%acss = unsigned1_to_int4(telems(j:j+DIM_ACS_C-1, irow))
+      j = w_no('asm1_commons', from1=.true.)
+      retrows(irow)%asm1_commons = unsigned1_to_int4(telems(j:j+DIM_ASM_C-1, irow))
+      j = w_no('asm2_commons', from1=.true.)
+      retrows(irow)%asm2_commons = unsigned1_to_int4(telems(j:j+DIM_ASM_C-1, irow))
+
+      ! Get the main ASM data (See Table 5.1.1 (pp.200) and Table 5.5.5--6 (pp.233--234) for the format)
+      ! Note Word (Wn) starts from n=0 in the Ginga Interim Report, whereas
+      ! the index of asmdats() starts from 1.
+      !
+      ! asmdats(1)  : W4
+      ! asmdats(2)  : W4
+      ! ...
+      ! asmdats(12) : W15
+      ! asmdats(13) : W20
+      ! asmdats(14) : W21
+      ! ...
+      ! asmdats(24) : W31
+      ! asmdats(25) : W36
+      ! ...
+      ! asmdats(96) : W127
+      do j=0, 7
+        i = j*8+1
+        k = j*12+1
+        ! if ((i+11 > size(retrows(irow)%asmdats)) .and. (i+15 > size(telems, 1))) call err_exit_play_safe()  ! Testing at the first time.
+        retrows(irow)%asmdats(k:k+11) = unsigned1_to_int4(telems(i+4:i+15,irow))
+      end do
     end do
   end function get_telem_raws2types
 
