@@ -194,14 +194,15 @@ contains
 !if (irowt > 95) print *,'DEBUG:429: irowt=',irowt,' mjd=',mjd
 !if (irowt > 95) print *,'DEBUG:430: irowt=',irowt,' size(frows)=',size(frows),' fr(1)mjd=',frows(1)%mjds(1)
     do irow=1, size(frows)
-!if (irowt > 95) print *,'DEBUG:431: irow=',irow,' fr(irow)mjd=',frows(irow)%mjds(1)
+!if (irowt > 95) print *,'DEBUG:431: irowt=',irowt,' irow=',irow,' fr(irow)mjd=',frows(irow)%mjds(1)
       if (mjd == frows(irow)%mjds(1)) then
+!if (irowt > 95) print *,'DEBUG:432: FOUND: irowt=',irowt,' irow=',irow
         retrow = irow
         return
       else if (mjd < frows(irow)%mjds(1)) then
 !if ((irow > 1).and.(irowt>95)) print *,'DEBUG:434: to return unfound; irow=',irow,' mjd=',mjd,' FRF-mjd(-1)=',frows(irow-1)%mjds(1)
 !if (irowt > 95) print *,'DEBUG:435: to return unfound; irow=',irow,' mjd=',mjd,' FRF-mjd(__)=',frows(irow)%mjds(1)
-        write(msg, '("Telemetry(row=",I5,", Frame=", I0.2, ")")') irowt, trows(irow)%fr_6bit;
+        write(msg, '("Telemetry(row=",I5,", Frame(0-63)=", I0.2, ")")') irowt, trows(irow)%fr_6bit;
         ! MJD in the current FRF-Row is larger than the MJD compared with.
         ! If the current one is just infinitesimally different (due to
         ! the floating-point calculation issue), match it.
@@ -239,7 +240,7 @@ contains
         ! Note this is skipped when irow==1
         if (is_frf_mjd_similar(mjd, frows(irow)%mjds(1), irow, msg, match=.false., factor=1.d0)) then
           write(stderr, '("WARNING: This time difference is too large for a floating error!")')  ! Extra warning (in addition to that in is_frf_mjd_similar()).
-!print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
+print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
           return
         end if
 
@@ -274,7 +275,7 @@ contains
 !print *,'DEBUG:390: get-init'
     do irowr=1, size(retrows)
       ! Gets the 32nd frame (=64/2, where 64 frames/SF), as its time is the mjds in FRF.
-      irowt = get_telem_row_index_from_fr(NFRAMES_PER_SF/2, trows, retrows(irowr)%irowt, retrows(irowr)%nframes) ! defined in asm_fits_common
+      irowt = get_telem_row_index_from_fr(NFRAMES_PER_SF/2+1, trows, retrows(irowr)%irowt, retrows(irowr)%nframes) ! defined in asm_fits_common
 
 !do irowt=1, min(3, size(retrows))  !! DEBUG
       ! irowf = get_matched_frfrow(trows(irowt)%mjd, frows, irowt)

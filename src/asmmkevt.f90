@@ -158,6 +158,8 @@ program asmmkevt
 call dump_type(tfhead, 1) !! DEBUG
   trows = get_telem_raws2types(headers, telems)
   call add_mjd2telem(tfhead, trows)
+  if (allocated(headers)) deallocate(headers)
+  if (allocated(telems)) deallocate(telems)
 
   ! Get the FRF
   !call mk_frf_rows(trim(frffil), frfhead, frfrows)
@@ -171,6 +173,12 @@ call dump_type(tfhead, 1) !! DEBUG
   !call write_asm_evt_fits(outfil, tfhead, trows, relrows, status)
   outhead = get_merged_head(tfhead, frfhead)
   call write_asm_evt_fits(get_val_from_key('outfile', argv), outhead, trows, relrows, status)
+
+  call print_proc_stats(trows, relrows, frfrows)
+
+  if (allocated(trows)) deallocate(trows)
+  if (allocated(frfrows)) deallocate(frfrows)
+  if (allocated(relrows)) deallocate(relrows)
 
 if (.false.) then
 ! ******** write test fits **********

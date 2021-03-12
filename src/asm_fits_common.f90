@@ -322,8 +322,8 @@ module asm_fits_common
     integer             :: nargs = 0;  ! Number of Integer arguments required with the "fmt"
   end type t_invalid_fmt
   type(t_invalid_fmt), dimension(5), parameter :: INVALID_FMT = [ &
-       t_invalid_fmt(key='no_frf', desc='no matching with FRF found' &
-                                , fmt='("no matching with FRF found")', nargs=0) &
+       t_invalid_fmt(key='no_frf', desc='no matching with FRF found (not considered anymore)' &
+                                , fmt='("no matching with FRF found (not considered anymore)")', nargs=0) &
      , t_invalid_fmt(key='tel64',  desc='less than 64 Telemetry nFrames' &  ! NFRAMES_PER_SF = 64
                                 , fmt='("less than 64 Telemetry nFrames=",I2)', nargs=1) &
      , t_invalid_fmt(key='lostf',  desc='positive lostf(FRF)' &
@@ -1738,13 +1738,34 @@ if (ittype > nsiz) call err_exit_play_safe()
       !  character(len=64), dimension(:), parameter :: ttype
       !, tform, tunit, extname, varidat, status)
 
+  ! Print the result of calc_proc_stats() to STDOUT
+  !
+  subroutine print_proc_stats(trows, relrows, frfrows)
+    type(asm_telem_row), dimension(:), intent(in) :: trows
+    type(asm_sfrow), dimension(:), intent(in) :: relrows
+    type(asm_frfrow), dimension(:), intent(in) :: frfrows
+    character(len=LEN_PROC_STATS), dimension(:), allocatable :: ar_strs_stats
+    integer :: j
+
+    ar_strs_stats = calc_proc_stats(trows, relrows, frfrows)  ! allocatable
+    write(*,'("----------- Processing Statistics -----------")')
+    do j=1, size(ar_strs_stats)
+      write(*,'(A)') trim(ar_strs_stats(j))
+    end do
+    write(*,'("---------------------------------------------")')
+    if (allocated(ar_strs_stats)) deallocate(ar_strs_stats)
+  end subroutine print_proc_stats
+
   ! Returns String of process statistics
   !
   ! TODO: Discarded due to ASM at the beginning, end, middle
-  function calc_proc_stats(trows, sfrows) result(strs_stats)
-    integer, parameter :: n_b4bd = 4, SIZE_FMT = size(INVALID_FMT)
+  !
+  ! Note: Call print_proc_stats() to output to STDOUT
+  function calc_proc_stats(trows, sfrows, frfrows) result(strs_stats)
+    integer, parameter :: n_b4bd = 5, SIZE_FMT = size(INVALID_FMT)
     type(asm_telem_row), dimension(:), intent(in) :: trows
     type(asm_sfrow), dimension(:), intent(in) :: sfrows
+    type(asm_frfrow), dimension(:), intent(in) :: frfrows
     character(len=LEN_PROC_STATS), dimension(n_b4bd+SIZE_FMT+2) :: strs_stats
     character(len=LEN_PROC_STATS) :: s
 
@@ -1755,14 +1776,17 @@ if (ittype > nsiz) call err_exit_play_safe()
     n_fr_output = sum(sfrows%nframes, sfrows%is_valid)
     write(s,'("Output/Discarded/Telemetry numbers of frames: ", I6, " /", I6, " /", I6)') &
        n_fr_output, size(trows)-n_fr_output, size(trows)
-    strs_stats(n_b4bd-3) = s  ! Index=1
+    strs_stats(n_b4bd-4) = s  ! Index=1
     n = count(sfrows%is_valid)
     n_discarded = size(sfrows)-n
     write(s,'("Output/Discarded/Telemetry numbers of SFs: ", I5, " /", I5, " /", I5)') &
        n, n_discarded, size(sfrows)
-    strs_stats(n_b4bd-2) = s  ! Index=2
-    strs_stats(n_b4bd-1) = '  (Note: SF number of Telemetry may not be strictly accurate.)' ! Index=3
-    strs_stats(n_b4bd)   = '  Breakdown: discarded due to:' ! Index=4
+    strs_stats(n_b4bd-3) = s  ! Index=2
+    strs_stats(n_b4bd-2) = '  (Note: SF number of Telemetry may not be strictly accurate.)' ! Index=3
+    write(s,'("FRF/matched(be4-discarded) numbers of SFs: ", I5, " /", I5)') &
+       size(frfrows), count(sfrows%with_frf)
+    strs_stats(n_b4bd-1) = s ! Index=4
+    strs_stats(n_b4bd)   = '  Breakdown: discarded due to:' ! Index=5
     n_tot = 0
     do ifmt=1, SIZE_FMT             ! Index=5..X
       ! Counting the number of Frames for each "reason_invalid" (which is defined only when is_valid==.false.)

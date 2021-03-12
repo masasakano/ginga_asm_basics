@@ -27,7 +27,6 @@ program asmtelemetryout
   type(fits_header) :: frfhead
   type(asm_frfrow), dimension(:), allocatable :: frfrows
   type(asm_sfrow), dimension(:), allocatable :: relrows
-  character(len=LEN_PROC_STATS), dimension(:), allocatable :: ar_strs_stats
 
   character(len=1024) :: arg
   type(t_argv), dimension(:), allocatable :: allargv
@@ -104,13 +103,7 @@ call dump_all_argv(allargv(istart_main+3:)) ! DEBUG
     call write_asm_evt_fits(get_val_from_key('outfile', allargv), outhead, trows, relrows, status, allargv(istart_main+3:)%val)
   end if
 
-    ar_strs_stats = calc_proc_stats(trows, relrows)  ! allocatable
-    write(*,'("----------- Processing Statistics -----------")')
-    do j=1, size(ar_strs_stats)
-      write(*,'(A)') trim(ar_strs_stats(j))
-    end do
-    write(*,'("---------------------------------------------")')
-    if (allocated(ar_strs_stats)) deallocate(ar_strs_stats)
+  call print_proc_stats(trows, relrows, frfrows)
 
   if (allocated(allargv)) deallocate(allargv)
 end program asmtelemetryout

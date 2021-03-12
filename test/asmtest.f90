@@ -713,7 +713,7 @@ print *, 'DEBUG:135: update'
     !call update_asm_sfrow_modes(trows, relrows, skip_validate=.true.)
     call update_asm_sfrow_modes(trows, relrows)
 
-    ar_strs_stats = calc_proc_stats(trows, relrows)  ! allocatable
+    ar_strs_stats = calc_proc_stats(trows, relrows, frfrows)  ! allocatable
     write(*,'("----------- Processing Statistics -----------")')
     do j=1, size(ar_strs_stats)
       write(*,'(A)') trim(ar_strs_stats(j))
