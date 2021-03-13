@@ -88,7 +88,7 @@ program asmmkevt
   end do
   if (j < 3) call err_exit_with_msg('The number of the main argument must be exactly 3, but given only '//trim(ladjusted_int(j)))
 
-  WRITE (*,*) 'fname=' // TRIM(fname)  ! maybe syntax error strictly?
+if (IS_DEBUG()) WRITE (*,*) 'fname=' // TRIM(fname)
 
   ! Get (fill) headers, telems: raw byte Array(word(byte), row)
 !  call read_telemetry(fname, headers, telems) !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -149,13 +149,15 @@ program asmmkevt
       !deallocate(ardata, STAT=status)
       !print *, 'DEBUG(24): after-dealloc '
 
-    end if
+  end if
     
   !---------------- MAIN ------------------
     
   ! Get telm_rows from the default data with add_mjd2telem(tfhead, telm_rows)
   call read_telemetry(trim(get_val_from_key('telemetry', argv)), tfhead, headers, telems) ! tfhead: Telemetry-Fits-HEADer
+if (IS_DEBUG()) then ! in asm_fits_common
 call dump_type(tfhead, 1) !! DEBUG
+end if
   trows = get_telem_raws2types(headers, telems)
   call add_mjd2telem(tfhead, trows)
   if (allocated(headers)) deallocate(headers)
@@ -171,7 +173,8 @@ call dump_type(tfhead, 1) !! DEBUG
 
   !call write_asm_fits(trim(DEF_FNAME_OUT), tfhead, trows, frfrows, relrows, status)
   !call write_asm_evt_fits(outfil, tfhead, trows, relrows, status)
-  outhead = get_merged_head(tfhead, frfhead)
+  outhead = get_asm_fits_header(tfhead, frfhead, trows, relrows, status)
+  !outhead = get_merged_head(tfhead, frfhead)
   call write_asm_evt_fits(get_val_from_key('outfile', argv), outhead, trows, relrows, status)
 
   call print_proc_stats(trows, relrows, frfrows)

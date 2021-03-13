@@ -37,9 +37,9 @@ program asmtelemetryout
 
   !-- Handle the command-line arguments.
 
-print *,'DEBUG:002: command_argument_count()=',command_argument_count()
+if (IS_DEBUG()) print *,'DEBUG:002: command_argument_count()=',command_argument_count()
   allocate(allargv(command_argument_count()))  ! F2003 standard  (_excluding_ $0)
-print *,'DEBUG:003: size(allargv)=',size(allargv)
+if (IS_DEBUG()) print *,'DEBUG:003: size(allargv)=',size(allargv)
   !allargv(2:4) = [t_argv(key='telemetry'), t_argv(key='FRF'), t_argv(key='outfile')]
   !allargv(2) = t_argv(key='telemetry')
   !allargv(3) = t_argv(key='FRF')
@@ -55,7 +55,7 @@ print *,'DEBUG:003: size(allargv)=',size(allargv)
 
     if ((trim(arg) == '-h') .or. (trim(arg) == '--help')) then
       print *, 'USAGE: asmtelemetryout [-h] Telemetry.fits FRF.fits out.fits KEY1 [Key2 [Key3 ...]]'
-      print *, ' Keys: Tstart|Euler|SFNum|SF2bits|Fr6bits|FrameNum|i_frame|Status_C|Status_S|DP_C|DP_S' &
+      print *, ' Keys: Tstart|Euler|SFNum|SFNTelem|SF2bits|Fr6bits|FrameNum|i_frame|Status_C|Status_S|DP_C|DP_S' &
                    //'|ACS_C|ASM_C1|ASM_C2|bitrate|ASM_Mode|Slew360|Time_PHA|F56W66B4|'
       call EXIT(0)
     end if
@@ -76,8 +76,9 @@ print *,'DEBUG:003: size(allargv)=',size(allargv)
   n_mainarg = size(allargv) - istart_main + 1
   if (n_mainarg < 3) call err_exit_with_msg( &
      'The number of the main argument must be at least 3, but given only '//trim(ladjusted_int(n_mainarg)))
-print *,'DEBUG:024: istart_main=',istart_main, ' n_mainarg=',n_mainarg
-call dump_all_argv(allargv) ! DEBUG
+if (IS_DEBUG()) print *,'DEBUG:024: istart_main=',istart_main, ' n_mainarg=',n_mainarg
+
+  call dump_all_argv(allargv) ! DEBUG and for information
 
   !---------------- MAIN ------------------
     
@@ -93,13 +94,16 @@ call dump_all_argv(allargv) ! DEBUG
   relrows = get_asm_sfrow(trows, frfrows)
   call update_asm_sfrow_modes(trows, relrows, skip_validate=.true.) ! skip_validate: Major difference from asmmkevt.f90
 
-  outhead = get_merged_head(tfhead, frfhead)
+  !outhead = get_merged_head(tfhead, frfhead)
+  outhead = get_asm_fits_header(tfhead, frfhead, trows, relrows, status)
 
   if (n_mainarg == 3) then
     call write_asm_evt_fits(get_val_from_key('outfile', allargv), outhead, trows, relrows, status)
   else
+if (IS_DEBUG()) then ! in asm_fits_common
 print *,'DEBUG:032: ' 
 call dump_all_argv(allargv(istart_main+3:)) ! DEBUG
+end if
     call write_asm_evt_fits(get_val_from_key('outfile', allargv), outhead, trows, relrows, status, allargv(istart_main+3:)%val)
   end if
 

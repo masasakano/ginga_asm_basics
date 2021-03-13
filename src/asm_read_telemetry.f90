@@ -46,17 +46,6 @@ contains
     end if
   end function get_safe_unit
 
-  function get_merged_head(tfhead, frfhead) result(rethead)
-    type(fits_header), intent(in) :: tfhead, frfhead
-    type(fits_header) :: rethead
-
-    rethead = tfhead
-    rethead%FRFFILE%val = trim(frfhead%FRFFILE%val)
-    rethead%kPASS%val = trim(frfhead%kPASS%val)
-    rethead%TARGET1%val = trim(frfhead%TARGET1%val)
-    rethead%TARGET2%val = trim(frfhead%TARGET2%val)
-  end function get_merged_head
-
   ! Make and get fits_header and asm_telem_row of the telemetry from File
   !
   ! Returns an Array of the Telemetry object and corresponding FITS-header object.
@@ -112,7 +101,7 @@ contains
     call FTMAHD(funit, 2, hdutype, status)           ! Move to the 1st extention
     call err_exit_if_status(status, 'Failed to move to the 1st extension: '//trim(fname))
 
-    frfhead%FRFFILE%val = trim(basename(fname))
+    frfhead%FRFFILE%val  = trim(basename(fname))
 
     !------ Read header keywords
 
@@ -218,8 +207,10 @@ contains
     fhead%INSTRUME%val = 'ASM'
     fhead%FILENAME%val = trim(basename(fname))
 
+if (IS_DEBUG()) then ! in asm_fits_common
 print *,'DEBUG:9232: fhead:'
 call dump_type(fhead, 1) !! DEBUG
+end if
     naxes = (/ (-999, i = 1, size(naxes)) /)
     ! FiTs_Get_Table_DiMension
     call FTGTDM(funit, 1, maxaxes, num_axis, naxes, status)

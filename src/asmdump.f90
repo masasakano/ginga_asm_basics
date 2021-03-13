@@ -709,7 +709,7 @@ PROGRAM   ASMDUMP
 !   * ACS data (W33-35): Attitude, STT, IRU, NSAS, etc (depending on the frame)
 !   * ASM data (W48-51)
 !   * AHK (W64): House-keeping (HV, temperature, ...)
-!   * status (W65): (Slew369 Mode: F32n+10 W65 B3)
+!   * status (W65): (Slew360 Mode: F32n+10 W65 B3)
 !   * DP (W66): (ASM Mode: F8n+4 W66 B3; (ON/OFF <=> 1/0)) (B4: PHA/Time <-> 0/1)
 !   * PI MON (W67) / principal-instrument monitor??
 !   * ASM data (W112-115)

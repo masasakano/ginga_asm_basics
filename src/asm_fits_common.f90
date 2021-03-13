@@ -24,6 +24,7 @@ module asm_fits_common
   integer, parameter :: LEN_T_INVALID_FMT_KEY = 32
   integer, parameter :: LEN_PROC_STATS = 256
   integer, parameter :: LEN_T_ARGV = 1024
+  real(dp8), parameter :: UNDEF_REAL = -1024.0d0
   character(len=*), parameter :: OUTFTCOMMENT1 = 'Created by combining a Ginga telemetry file&
      & and corresponding FRF for the LAC.  However, the LAC FRFs usually lack the data in which&
      & the ASM-Mode is on.  Therefore, no meaningful Euler angles appear in the Table&
@@ -357,6 +358,7 @@ module asm_fits_common
     type(asm_frfrow) :: frf = asm_frfrow(); ! -1 shall be (though not guaranteeed) set for %sfn and %lostf if with_frf is .false. 
        !integer(ip4) :: sfn     = -999; ! SF Number in FRF determined by SIRIUS
        !integer(ip4) :: lostf   = -999; ! number of LOST Frames (wrong "SYNC")
+    integer(ip4) :: sfntelem  = -999; ! (guessed) SF Number based on the telemetry alone
     integer(ip4) :: mode_asm  = -999; ! F8n+4 W66(=DP) B3: ASM Mode (ON/OFF <=> 1/0)
     integer(ip4) :: mode_slew = -999; ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed)) ! Ref: Table 5.1.12, pp.209
     integer(ip4) :: mode_PHA  = -999; ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
@@ -446,12 +448,13 @@ module asm_fits_common
                         ! i.e., Euler1, Euler2, Euler3 must be in a different variable.
                         ! n.b., for ACS_C, though it is an array, the corresponding TTYPE is only 1, hence dim=1
   end type t_form_unit
-  type(t_form_unit), dimension(19), parameter :: COL_FORM_UNITS = [ &
+  type(t_form_unit), dimension(20), parameter :: COL_FORM_UNITS = [ &
      ! note: I=Int*2, J=Int*4, D=Real*8
        t_form_unit(key='main',     root='',        form='1I', unit='count', comm='Main ASM data', dim=NWORDS_MAIN) & ! Special case: root should be explicitly specified when used. See function get_colheads()
      , t_form_unit(key='Tstart',   root='Tstart',  form='1D', unit='day', comm='Start datetime in MJD') &
-     , t_form_unit(key='Euler',    root='Euler',   form='1D', unit='rad', comm='Euler angle', dim=3) &
+     , t_form_unit(key='Euler',    root='Euler',   form='1D', unit='deg', comm='Euler angle', dim=3) &
      , t_form_unit(key='SFNum',    root='SFNum',   form='1J',  comm='As defined in FRF if defined') &
+     , t_form_unit(key='SFNTelem', root='SFNTelem',form='1J',  comm='SF number based on Telemetry alone') & ! %sfntelem 
      , t_form_unit(key='SF2bits',  root='SF2bits', form='1I',  comm='2-bit SF from FI in Telemetry') &
      , t_form_unit(key='Fr6bits',  root='Fr6bits', form='1I',  comm='Frame number from FI in Telemetry') &
      , t_form_unit(key='FrameNum', root='FrameNum', form='1I',  comm='Frame number for F1-F64') &
@@ -609,12 +612,12 @@ module asm_fits_common
     type(fhead1ch) :: INSTRUME= fhead1ch(name='INSTRUME', comment=''); ! 'ASM'
     type(fhead1ch) :: FILENAME= fhead1ch(name='FILENAME', comment='Original filename'); ! '/my/home/data/a123.fits'
                                   ! DATE-OBS='' ; ! '1990-01-23' / [day] Observation date (MJD)
-    type(fhead1r8) :: TSTART  = fhead1r8(name='TSTART'  , comment='[s] Start time'); ! 8.12345678E05
-    type(fhead1r8) :: TEND    = fhead1r8(name='TEND'    , comment='[s] End time');   ! 9.12345678E05
-    type(fhead1r8) :: TSTARTMA= fhead1r8(name='TSTARTMA', comment='[s] Start time of ASM Mode');     ! 8.12345678E05
-    type(fhead1r8) :: TENDMA  = fhead1r8(name='TENDMA'  , comment='[s] End time of ASM Mode');       ! 9.12345678E05
-    type(fhead1r8) :: TSTARTMS= fhead1r8(name='TSTARTMS', comment='[s] Start time of Slew360 Mode'); ! 8.12345678E05
-    type(fhead1r8) :: TENDMS  = fhead1r8(name='TENDMS'  , comment='[s] End time of Slew360 Mode');   ! 9.12345678E05
+    type(fhead1r8) :: TSTART  = fhead1r8(name='TSTART'  , comment='[day] Start time'); ! 8.12345678E05
+    type(fhead1r8) :: TEND    = fhead1r8(name='TEND'    , comment='[day] End time');   ! 9.12345678E05
+    type(fhead1r8) :: TSTARTMA= fhead1r8(name='TSTARTMA', comment='[day] Start time of ASM Mode');     ! 8.12345678E05
+    type(fhead1r8) :: TENDMA  = fhead1r8(name='TENDMA'  , comment='[day] End time of ASM Mode');       ! 9.12345678E05
+    type(fhead1r8) :: TSTARTMS= fhead1r8(name='TSTARTMS', comment='[day] Start time of Slew360 Mode'); ! 8.12345678E05
+    type(fhead1r8) :: TENDMS  = fhead1r8(name='TENDMS'  , comment='[day] End time of Slew360 Mode');   ! 9.12345678E05
     type(fhead1i4) :: SSTARTMS= fhead1i4(name='SSTARTMS', comment='Start SF of Slew360 Mode'); ! 12345
     type(fhead1i4) :: SENDMS  = fhead1i4(name='SENDMS'  , comment='End SF of Slew360 Mode');   ! 66666
     type(fhead1tf) :: EXISTDAT= fhead1tf(val=.true., name='EXISTDAT', comment='True if the file contains data'); ! T
@@ -639,7 +642,7 @@ module asm_fits_common
     type(fhead1ch) :: STAT__RBM=fhead1ch(name='STAT-RBM', comment='''ENA'' or ''DIS'''); ! 'ENA'
     type(fhead1ch) :: STAT__BDR=fhead1ch(name='STAT-BDR', comment='''ENA'' or ''DIS'''); ! 'DIS'
    !type(fhead1i4) :: BITRATE0= fhead1i4(name='BITRATE0', comment='[/s] Initial telemetry bit rate');   ! 32
-    type(fhead1i4) :: SFRAMES = fhead1i4(name='SFRAMES',  comment='Number of SFs in the file'); ! 10000
+    type(fhead1i4) :: SFRAMES = fhead1i4(name='SFRAMES',  comment='Number of SFs in the file'); ! 10000  ! Note: "TOTAL_SF" in the FRF file.
     ! -- Misc ------------
     type(fhead1ch) :: FRFFILE = fhead1ch(name='FRFFILE',  comment='FRF Filename'); ! 'FR880428.S0220.fits'
     type(fhead1i4) :: TOTSFFRF= fhead1i4(name='TOTSFFRF', comment='Total number of SFs in the FRF'); ! 488
@@ -1058,6 +1061,14 @@ contains
     ret = t_frame_word_bit(frame=iframe, word=iword, bit=ibit) 
   end function frame_word_first
 
+  ! Returns MJD of starting epoch of the first frame of a SF, based on sfrow/relrow
+  real(kind=dp8) function sfrow2mjd(sfrow, trows) result(retmjd)
+    type(asm_sfrow), intent(in) :: sfrow
+    type(asm_telem_row), dimension(:), intent(in) :: trows
+
+    retmjd = trows(sfrow%irowt)%mjd
+  end function sfrow2mjd
+
   ! dump character array
   subroutine dump_chars(rows, prefix)
     character(len=*), dimension(:), intent(in) :: rows
@@ -1362,7 +1373,7 @@ contains
 
     ! ------------- below: not executed in default (unless the above .true. is reset to .false.)
     !               This can be useful when memory trouble is rampant.
-    print *,'DEBUG:642-1, iy1=', iy1
+!print *,'DEBUG:642-1, iy1=', iy1
     select case(iy1)
     case (1)
       ciy1='1'
@@ -1373,7 +1384,7 @@ contains
       call EXIT(1)
     end select
         !write(ciy1, '(I1)') iy1
-    print *,'DEBUG:642-2, ifw=',ifw
+!print *,'DEBUG:642-2, ifw=',ifw
     select case(ifw)
     case (1,2,3)
       cifw=char(ifw+48)
@@ -1382,20 +1393,20 @@ contains
       call EXIT(1)
     end select
         !write(cifw, '(I1)') ifw
-    print *,'DEBUG:642-3'
-    print *,'DEBUG:642-3-cifw=',cifw,' ichp=',ichp
+!print *,'DEBUG:642-3'
+!print *,'DEBUG:642-3-cifw=',cifw,' ichp=',ichp
     cichp = char(ichp/10+48)
     cichp(2:2) = char(mod(ichp,10)+48)
         !write(cichp, '(I0.2)') ichp
-    print *,'DEBUG:643:aft_lowh, cichp=',cichp
-    print *,'DEBUG:643-0:icht=',icht
+!print *,'DEBUG:643:aft_lowh, cichp=',cichp
+!print *,'DEBUG:643-0:icht=',icht
     cicht = '00'
     cicht(2:2) = char(icht+48)
-    print *,'DEBUG:643-1, icht=', icht, ' cicht=',cicht
+!print *,'DEBUG:643-1, icht=', icht, ' cicht=',cicht
         !write(cicht, '(I0.2)') icht
-    print *,'DEBUG:644:bef_wri,iy1=',iy1,' ifw=',ifw,' ichp=',ichp
+!print *,'DEBUG:644:bef_wri,iy1=',iy1,' ifw=',ifw,' ichp=',ichp
     ret = 'Y'//ciy1//cifw//'CH'//cichp//'/Y'//ciy1//low_high//cicht
-    print *,'DEBUG:644-1:bef_wri,ret=',ret
+!print *,'DEBUG:644-1:bef_wri,ret=',ret
   end function get_ttype_main
 
   
@@ -1878,5 +1889,32 @@ if (ittype > nsiz) call err_exit_play_safe()
     end if
   end function get_onoff_enadis_from_tf
 
+  ! Returns true if the environmental variable DEBUG is set and NOT 'false' or 'no'.
+  logical function IS_DEBUG() result(ret)
+    character(len=255) :: env_debug
+    integer :: status
+    integer, save :: prev_result = -99
+
+    ! To avoid repeatedly accessing the system to get the environmental variable.
+    if (prev_result < 0) then  ! This IF-statment is redundant (but is left for readability).
+      select case(prev_result)
+      case(0)
+        ret = .false.
+        return
+      case(1)
+        ret = .true.
+        return
+      end select
+    end if
+        
+    call GET_ENVIRONMENT_VARIABLE('DEBUG', env_debug, STATUS=status)
+    if ((status == 1) .or. (trim(env_debug) == 'false') .or. (trim(env_debug) == 'no')) then  ! 1 for non-existent, 2 for environment var. not-supported by the system
+      ret = .false.
+      prev_result = 0
+    else
+      ret = .true.
+      prev_result = 1
+    end if
+  end function IS_DEBUG
 end module asm_fits_common
 

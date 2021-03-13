@@ -73,7 +73,7 @@ contains
     ! The maximum possible number of rows for the returned array is that of the given trows.
     ! The returned array from this function eliminate undefined rows (newly allocated).
 
-    integer :: irowt, iret, siz_trows ! I-th-ROW-Telemetry, I-th-row-RETurned-array
+    integer :: i, irowt, iret, siz_trows ! I-th-ROW-Telemetry, I-th-row-RETurned-array
     integer :: sf2bit_prev, fr6bit_prev, status
     integer :: nframes ! Number of FRAMES in the current SF.
 
@@ -113,6 +113,8 @@ contains
     allocate(rets(iret), STAT=status)
 !print *, 'DEBUG:796: iret=',iret, ' size(rets)=', size(rets)
     rets(:) = rows2init(1:iret)
+    rets(:)%sfntelem = (/ (i, i=1, iret) /)
+
     if ((mod(siz_trows, NFRAMES_PER_SF) == 0) .and. (iret == siz_trows/NFRAMES_PER_SF)) then
       ! do nothing
     else
@@ -501,6 +503,74 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     kval = btest2int_int4_as_1byte(kval, loc_fwb%bit) ! defined in fort_util
   end function get_val_frb
 
+  ! Returns merged FITS header from Telemetry and FRF
+  function get_merged_head(tfhead, frfhead) result(rethead)
+    type(fits_header), intent(in) :: tfhead, frfhead
+    type(fits_header) :: rethead
+
+    rethead = tfhead
+    rethead%FRFFILE%val = trim(frfhead%FRFFILE%val)
+    rethead%kPASS%val = trim(frfhead%kPASS%val)
+    rethead%TARGET1%val = trim(frfhead%TARGET1%val)
+    rethead%TARGET2%val = trim(frfhead%TARGET2%val)
+  end function get_merged_head
+
+  ! Returns merged FITS header from Telemetry and FRF
+  function get_asm_fits_header(tfhead, frfhead, trows, relrows, status) result(rethead)
+    type(fits_header), intent(in) :: tfhead, frfhead
+    type(asm_telem_row), dimension(:), intent(in) :: trows
+    !type(asm_frfrow), dimension(:), intent(in) :: frfrows
+    type(asm_sfrow), dimension(:), intent(in) :: relrows
+    integer, intent(out) :: status
+    type(fits_header) :: rethead
+
+    integer, dimension(1) :: ilocs
+    !integer, dimension(:), allocatable :: ilocs
+    real(kind=dp8) :: mjdtmp, mjd_interval
+    integer :: irowt
+
+    ! Initialization
+    rethead = get_merged_head(tfhead, frfhead)
+
+    rethead%SFRAMES%val = count(relrows%is_valid)
+
+    rethead%TSTART%val   = UNDEF_REAL
+    rethead%TEND%val     = UNDEF_REAL
+    rethead%TSTARTMA%val = UNDEF_REAL
+    rethead%TENDMA%val   = UNDEF_REAL
+    rethead%TSTARTMS%val = UNDEF_REAL
+    rethead%TENDMS%val   = UNDEF_REAL
+
+    ! Whether the file contains the data.
+    rethead%EXISTDAT%val = .false.  ! any(relrows%is_valid)
+
+    ! Start/End times
+    ilocs = findloc(relrows%is_valid, .true.)
+    if (ilocs(1) == 0) return  ! No valid data
+
+    rethead%EXISTDAT%val = .true.
+    rethead%TSTART%val = sfrow2mjd(relrows(ilocs(1)), trows)  ! defined in asm_fits_common
+    rethead%TSTARTMA%val = rethead%TSTART%val
+
+    ilocs = findloc(relrows%is_valid, .true., BACK=.true.)
+    mjdtmp = sfrow2mjd(relrows(ilocs(1)), trows)  ! The start time of the last valid Frame
+    mjd_interval = mjdtmp - sfrow2mjd(relrows(ilocs(1)-1), trows)
+    rethead%TEND%val   = mjdtmp + mjd_interval    ! The end time of the last valid Frame
+    rethead%TENDMA%val = rethead%TEND%val
+
+    ! First/Last Eulers
+    !..................................................
+
+    ! Start/End times of Slew360 mode
+    ilocs = findloc(relrows%mode_slew, 1, MASK=relrows%is_valid)
+    if (ilocs(1) == 0) return  ! No ASM-Slew360 data
+
+    rethead%TSTARTMS%val = sfrow2mjd(relrows(ilocs(1)), trows)  ! defined in asm_fits_common
+    ilocs = findloc(relrows%mode_slew, 1, MASK=relrows%is_valid, BACK=.true.)
+    rethead%TENDMS%val   = sfrow2mjd(relrows(ilocs(1)), trows) + mjd_interval ! The end time of the last valid ASM-Mode Frame
+  end function get_asm_fits_header
+
+
   !function get_fitshead(trows, sfrow) result(fitshead)
   !  type(asm_telem_row), dimension(:), intent(in) :: trows
   !  type(asm_sfrow), intent(in) :: sfrow
@@ -542,11 +612,20 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     call FTPKYL(unit, fhd%EXISTDAT%name, fhd%EXISTDAT%val, fhd%EXISTDAT%comment, status)
     call warn_ftpcl_status(status, 'ftpkyl', trim(Subname)//':EXISTDAT')
 
+    call FTPKYJ(unit, fhd%SFRAMES%name, fhd%SFRAMES%val, fhd%SFRAMES%comment, status)
+    call FTPKYD(unit, fhd%TSTART%name,   fhd%TSTART%val,   14, fhd%TSTART%comment, status)
+    call FTPKYD(unit, fhd%TEND%name,     fhd%TEND%val,     14, fhd%TEND%comment, status)
+    call FTPKYD(unit, fhd%TSTARTMA%name, fhd%TSTARTMA%val, 14, fhd%TSTARTMA%comment, status)
+    call FTPKYD(unit, fhd%TENDMA%name,   fhd%TENDMA%val,   14, fhd%TENDMA%comment, status)
+    call FTPKYD(unit, fhd%TSTARTMS%name, fhd%TSTARTMS%val, 14, fhd%TSTARTMS%comment, status)
+    call FTPKYD(unit, fhd%TENDMS%name,   fhd%TENDMS%val,   14, fhd%TENDMS%comment, status)
+
     call FTPCOM(unit, OUTFTCOMMENT1, status)  ! defined in asm_fits_common
     !call FTPHIS(unit, HISTORY1, status)  ! defined in asm_fits_common
     
     !call FTPKYS(unit, 'TITLE',    fitshead%title,    asm_comm%title,    status)
     !!call FTPKY[JKLS](funit, 'date', '????', '[day] Creation date of this file', status)
+    !!call FTPKY[EDFG](unit,keyword,keyval,decimals,comment, > status)  ! decimals < 0 => G format, -4 means 4 digits below 0
     ! .........
   end subroutine write_asm_fits_header
 
@@ -582,10 +661,10 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     integer :: nhdu
     character(len=30) :: errtext
     call ftgiou(unit, status)
-print *,'DEBUG:041:giou, unit=', unit, ' status=',status
+if (IS_DEBUG()) print *,'DEBUG:041:giou, unit=', unit, ' status=',status
 if ((status .ne. 0) .and. ((unit > 999) .or. (unit < 9))) unit = 160
 call ftinit(unit, '/tmp/out.fits', blocksize, status)
-print *,'DEBUG:042:b3ftart-out, status=',status
+if (IS_DEBUG()) print *,'DEBUG:042:b3ftart-out, status=',status
     call ftclos(unit, status)
     call ftfiou(unit, status)
   end subroutine write_tmp_fits
@@ -630,9 +709,9 @@ print *,'DEBUG:042:b3ftart-out, status=',status
     allocate(cold(naxis2))
     allocate(cols8(naxis2))
 
+if (IS_DEBUG()) then ! in asm_fits_common
 print *,'DEBUG:2433'
 call dump_type(relrows(3), 3)
-!FTPCL[SLBIJKEDCM](unit,colnum,frow,felem,nelements,values, > status) ! frow: 1st row?, felem: 1st element?
 
 print *,'DEBUG:2439-6:'
 call dump_type(colheads(6))
@@ -640,6 +719,8 @@ print *,'DEBUG:2439-7:'
 call dump_type(colheads(7))
 print *,'DEBUG:2439-8:'
 call dump_type(colheads(8))
+end if
+!FTPCL[SLBIJKEDCM](unit,colnum,frow,felem,nelements,values, > status) ! frow: 1st row?, felem: 1st element?
     status = 0 
     iframe = 0 
     ittype = 0  ! TTYPEn
@@ -651,8 +732,10 @@ call dump_type(colheads(8))
       iend = 0
 !ckey = COL_FORM_UNITS(ikind)%key
       ckey = colheads(ikind)%key 
+if (IS_DEBUG()) then ! in asm_fits_common
 if (trim(ckey) .ne. 'main') then
 print *,'DEBUG:2010:ikind=',ikind, ' ckey=', trim(ckey)
+end if
 end if
       select case(trim(ckey))
       case('main')  ! Main ASM data (96 cells)
@@ -699,12 +782,12 @@ end if
           end do
         end do
         ittype = ittype + 1  ! FITS Table column number
-print *,'DEBUG:2310:ikind=',ikind, ' ittype=', ittype,' nelements=naxis2=',naxis2,' size(cold)=',size(cold)
+if (IS_DEBUG()) print *,'DEBUG:2310:ikind=',ikind, ' ittype=', ittype,' nelements=naxis2=',naxis2,' size(cold)=',size(cold)
         call FTPCLD(unit, ittype, 1, 1, naxis2, cold, status)  ! colnum = 1
         call warn_ftpcl_status(status, 'FTPCLD', ckey)
         call modify_ttype_comment(unit, ittype, ckey, status)
 
-        print *,'DEBUG:234:fds=',cold(5:8)
+if (IS_DEBUG()) print *,'DEBUG:234:fds=',cold(5:8)
 
       case('Euler')
         ! All frames in the same SF have a common value.
@@ -725,6 +808,7 @@ print *,'DEBUG:2310:ikind=',ikind, ' ittype=', ittype,' nelements=naxis2=',naxis
             end if
             ! cold(iout:iend) = frfrows(relrows(irelrow)%irowf)%eulers(iprm,1)  ! Same value for the entire SF
             cold(iout:iend) = relrows(irelrow)%frf%eulers(iprm,1)  ! Same value for the entire SF
+if (IS_DEBUG()) then ! in asm_fits_common
 if ((irelrow > 2) .and. (irelrow < 5)) then
  !print *,'DEBUG:429:iprm=',iprm,' irelrow=',irelrow,' irowf=',relrows(irelrow)%irowf,' iout=', iout, ' eulers=', &
     !frfrows(relrows(irelrow)%irowf)%eulers(:,1), ' This=',frfrows(relrows(irelrow)%irowf)%eulers(iprm,1),  &
@@ -732,9 +816,10 @@ if ((irelrow > 2) .and. (irelrow < 5)) then
      relrows(irelrow)%frf%eulers(:,1), ' This=',relrows(irelrow)%frf%eulers(iprm,1),  &
      ' cold=',cold(iout)
 end if
+end if
           end do
           ittype = ittype + 1  ! FITS Table column number
-print *,'DEBUG:2410:ikind=',ikind, ' ittype=', ittype , ' iprm=',iprm
+if (IS_DEBUG()) print *,'DEBUG:2410:ikind=',ikind, ' ittype=', ittype , ' iprm=',iprm
           call FTPCLD(unit, ittype, 1, 1, naxis2, cold, status)  ! colnum = 1
 ! print *,'DEBUG:430:ittype=',ittype,' iout=',iout,' naxis2=',naxis2,' cold(3)=',cold(66)
           call warn_ftpcl_status(status, 'FTPCLD', ckey)
@@ -744,42 +829,51 @@ print *,'DEBUG:2410:ikind=',ikind, ' ittype=', ittype , ' iprm=',iprm
         !end do
 !print *,'DEBUG:332:irowf(2)=',relrows(2)%irowf
 
-      case('SFNum')
+      case('SFNum', 'SFNTelem')
         ! Integer*4 columns based on the SF
         do iprm=1, 1
           colj(:) = 0
           iout = 0
           iend = 0
-print *,'DEBUG:2510:nrelrows=',nrelrows, ' ittype=', ittype 
+if (IS_DEBUG()) print *,'DEBUG:2510:nrelrows=',nrelrows, ' ittype=', ittype 
           do irelrow=1, nrelrows  ! Each relrow (=asm_sfrow) number
             if (.not. relrows(irelrow)%is_valid) cycle
             iout = iend + 1
             iend = iout+relrows(irelrow)%nframes-1
             if (iend > naxis2) then  ! sanity check
-              write(stderr, '("ERROR: strange (in sfn) with iout=",I6," <=> ",I6,"(max) when SFrow=",I5,"/",I5)') &
-                 iend, naxis2, irelrow, nrelrows
+              write(stderr, '("ERROR: strange (",A,") with iout=",I6," <=> ",I6,"(max) when SFrow=",I5,"/",I5)') &
+                 trim(ckey), iend, naxis2, irelrow, nrelrows
               call err_exit_play_safe()
             end if
-            !colj(iout:iend) = frfrows(relrows(irelrow)%irowf)%eulers(iprm, 1)
-            colj(iout:iend) = relrows(irelrow)%frf%sfn
+            select case(trim(ckey))
+            case('SFNum')
+              !colj(iout:iend) = frfrows(relrows(irelrow)%irowf)%eulers(iprm, 1)
+              colj(iout:iend) = relrows(irelrow)%frf%sfn
+if (IS_DEBUG()) then ! in asm_fits_common
 if (irelrow == 3) then
 print *,'DEBUG:2533:in the loop, iout=',iout,' iend=',iend
 call dump_type(relrows(3), 3)
 print *,'DEBUG:2534:in the loop'
 call dump_type(relrows(3)%frf)
 end if
+end if
+            case('SFNTelem')
+              colj(iout:iend) = relrows(irelrow)%SFNTelem
+            case default
+              call err_exit_play_safe(trim(ckey)) ! never happens
+            end select
           end do
           ittype = ittype + 1  ! FITS Table column number
-print *,'DEBUG:2540:FTPCLJ:nrelrows=',nrelrows, ' ittype=', ittype 
+if (IS_DEBUG()) print *,'DEBUG:2540:FTPCLJ:nrelrows=',nrelrows, ' ittype=', ittype 
           call FTPCLJ(unit, ittype, 1, 1, naxis2, colj, status)  ! colnum = 1
           call warn_ftpcl_status(status, 'FTPCLJ', ckey)
           call modify_ttype_comment(unit, ittype, ckey, status)
           ! call FTSNUL(unit,colnum,snull > status) ! Define string representation for NULL column
           ! call FTTNUL(unit,colnum,tnull > status) ! Define the integer(!) value to be treated as NULL
 
-print *,'DEBUG:364:sfn',iprm,'=',colj(63:65)
+if (IS_DEBUG()) print *,'DEBUG:364:sfn',iprm,'=',colj(63:65)
         end do
-call dump_type(relrows(5))
+if (IS_DEBUG()) call dump_type(relrows(5))
 
       case('SF2bits', 'Mode_ASM', 'Mode_PHA', 'ModeSlew', 'bitrate')  ! 'Fr6bits', 'i_frame', are Frame-based 
         ! Integer*2 columns
@@ -973,7 +1067,9 @@ call dump_type(relrows(5))
 
     status=0
 
+if (IS_DEBUG()) then ! in asm_fits_common
 call dump_type(fhead)  ! for DEBUG
+end if
 
 !!!!!!!!!!!!!!!!!!!!!!!
 !! TODO
@@ -982,17 +1078,19 @@ call dump_type(fhead)  ! for DEBUG
 !!!!!!!!!!!!!!!!!!!!!!!
 
     if (present(outcolkeys)) then
-call dump_chars(outcolkeys, 'DEBUG:143: outcolkeys=')
+if (IS_DEBUG()) call dump_chars(outcolkeys, 'DEBUG:143: outcolkeys=')
       colheads = get_colheads(outcolkeys)
-print *,'DEBUG:0095: size(colheads)=',size(colheads)
+if (IS_DEBUG()) print *,'DEBUG:0095: size(colheads)=',size(colheads)
     else
       colheads = get_colheads()  ! Column Header info
                                  ! %(key, type, prm%(form, unit, comm, dim))
     end if
+if (IS_DEBUG()) then ! in asm_fits_common
 if (size(colheads) > 94) then
 call dump_type(colheads(95))  ! for DEBUG
 call dump_type(colheads(97))  ! for DEBUG
 call dump_type(colheads(98))  ! for DEBUG
+end if
 end if
 !do i=99,size(colheads)  ! for DEBUG
 !  print *,'i=',i        ! for DEBUG
@@ -1016,7 +1114,7 @@ end if
 
     call FTGERR(status, errtext)  ! for Debugging
     call FTGHDN(unit, nhdu)  ! CHDU: Current HDU
-print *,'DEBUG:0010: test-open1-status=',status,' / HDU=',nhdu,' / ',trim(errtext)
+if (IS_DEBUG()) print *,'DEBUG:0010: test-open1-status=',status,' / HDU=',nhdu,' / ',trim(errtext)
 
     ! initialize parameters about the FITS image (300 x 200 16-bit integers)
     simple=.true.
@@ -1039,22 +1137,22 @@ print *,'DEBUG:0010: test-open1-status=',status,' / HDU=',nhdu,' / ',trim(errtex
     !call FTIBIN(unit,nrows,tfields,ttype,tform,tunit,Extname,varidat > status) ! nrows should be 0 ! FiTs-Insert-BINary-table
     !call FTIBIN(unit,0,2,ttypes,tforms,tunits,'TestBinExt',.true., status) ! Creates an extension with basic header and moves to it.
     !call FTIBIN(unit, 0, size(ttypes) &
-print *,'DEBUG:0030: size(tforms)=TFIELDS=',size(tforms)
+if (IS_DEBUG()) print *,'DEBUG:0030: size(tforms)=TFIELDS=',size(tforms)
     call FTIBIN(unit, 0, size(tforms) &
               , ttypes, tforms, tunits, Extname, .true., status) ! Creates an extension with basic header and moves to it.
     call warn_ftpcl_status(status, 'FTIBIN', Subname)
+if (IS_DEBUG()) then ! in asm_fits_common
 if (size(tforms) > 96) then
 print *,'DEBUG:0032:tforms(97)=',trim(tforms(97))
+end if
 end if
 
 call FTGHDN(unit, nhdu)
 call FTGERR(status, errtext)
-print *,'test-new-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
-
-    ! Whether the file contains the data.  (NOTE: it is not written in the variable, but in the file only.)
-    fhead%EXISTDAT%val = any(relrows%is_valid)
+if (IS_DEBUG()) print *,'test-new-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
 
     call write_asm_fits_header(unit, fhead, status, primary=.false.)
+    !fhead%EXISTDAT%val = any(relrows%is_valid)
 
     call write_cols(unit, trows, relrows, colheads, status)  !!!!!!!!!!!!!!!
 
@@ -1084,7 +1182,7 @@ print *,'test-new-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
     ! close the file and free the unit number
     call ftclos(unit, status)
     call FTGERR(status, errtext)
-    print *,'test-close-status=',status,' / ',trim(errtext)
+if (IS_DEBUG()) print *,'DEBUG: test-close-status=',status,' / ',trim(errtext)
     call ftfiou(unit, status)
 
     if (allocated(ttypes)) deallocate(ttypes)
@@ -1123,7 +1221,7 @@ print *,'test-new-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
     bitpix=16  ! signed 2-byte, -32: real, -64: double
     naxis=2
 
-print *,'DEBUG:125:start-out'
+if (IS_DEBUG()) print *,'DEBUG:125:start-out'
 
     ! Get an unused Logical Unit Number to use to create the FITS file
     call ftgiou(unit, status)
@@ -1132,18 +1230,18 @@ print *,'DEBUG:125:start-out'
       unit = 159
     end if
 
-print *,'DEBUG:140:aft-giou;unit=',unit, ' file=',trim(fname)
+if (IS_DEBUG()) print *,'DEBUG:140:aft-giou;unit=',unit, ' file=',trim(fname)
 
     ! create the new empty FITS file blocksize=1
 call ftinit(unit, '!/tmp/out.fits', blocksize, status)
     !call ftinit(unit, '!'//trim(fname), blocksize, status)
-print *,'DEBUG:142:b3ftart-out, status=',status
+if (IS_DEBUG()) print *,'DEBUG:142:b3ftart-out, status=',status
     if (status .ne. 0) then
       call FTGERR(status, errtext)
       write(stderr,'("ERROR: Failed in ftinit() with status=", I12,": ",A)') status, trim(errtext)
     end if
     call FTGHDN(unit, nhdu)  ! CHDU: Current HDU
-print *,'DEBUG:write-open1-status=',status,' / HDU=',nhdu,' / ',trim(errtext)
+if (IS_DEBUG()) print *,'DEBUG:write-open1-status=',status,' / HDU=',nhdu,' / ',trim(errtext)
     call ftphpr(unit,simple,bitpix,0,naxes,0,1,extend,status)
     !call ftpkyj(unit,'EXPOSURE',1500,'Total Exposure Time',status)
 
@@ -1177,14 +1275,14 @@ print *,'DEBUG:write-open1-status=',status,' / HDU=',nhdu,' / ',trim(errtext)
     call FTPCLD(unit,1,1,1,2,dvalues, status)  ! colnum = 1
     call FTGHDN(unit, nhdu)
     call FTGERR(status, errtext)
-print *,'DEBUG: dval-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
+if (IS_DEBUG()) print *,'DEBUG: dval-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
     
     call ftpkys(unit,'TDIM2','(20,1)','for Character in Binary table',status)
     call FTPCLS(unit,2,1,1,2,svalues, status)  ! colnum = 2
     !call FTPCLD(unit,2,1,1,2,d2values, status)
     call FTGHDN(unit, nhdu)
     call FTGERR(status, errtext)
-print *,'DEBUG: char-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)  ! If wrong, 309  / not an ASCII (A) column
+if (IS_DEBUG()) print *,'DEBUG: char-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)  ! If wrong, 309  / not an ASCII (A) column
 
     call ftclos(unit, status)
     call ftfiou(unit, status)
