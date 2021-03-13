@@ -11,9 +11,7 @@ program asmmkevt
 
   implicit none
 
-!integer, parameter :: dp = kind(1.d0) ! defined in asm_fits_common
-  integer :: Maxaxes, nbytepercard, nbyteforheader
-  parameter(Maxaxes = 2, nbytepercard = 144, nbyteforheader = 16 )
+  integer, parameter :: Maxaxes = 2, nbytepercard = 144, nbyteforheader = 16
   character(len=*), parameter :: Subname = 'main'
   integer sfn                                 
       INTEGER   SYNC(0:63),LOSTF,BITRAT,RELSTR ! ! BITRAT: 0(H), 1(M), 2(L)
@@ -27,10 +25,10 @@ program asmmkevt
 
   integer :: i, j
   character(len=1024) :: errmsg, arg, fname = '', telfil='', frffil = '', outfil = '', s
-  character(len=30) :: errtext
+  !character(len=30) :: errtext  ! for FTGERR(status, errtext)
 
-  integer :: funit, status=-999, blocksize !, hdutype, nframes, naxis1
-  integer, dimension(Maxaxes) :: naxes
+  integer :: funit, status=-999 !, blocksize, hdutype, nframes, naxis1
+  !integer, dimension(Maxaxes) :: naxes
 
   type(fits_header) :: tfhead, outhead
   integer(kind=1), dimension(:, :), allocatable :: headers, telems !  (word, row)
@@ -41,17 +39,17 @@ program asmmkevt
   type(asm_sfrow), dimension(:), allocatable :: relrows
 
 !---------- TEST      
-      integer unit,bitpix,naxis !status,blocksize,naxes(2)
-      character(len=80) :: filename
-      logical simple,extend
-      integer :: nhdu
-      character(len=80), dimension(2) :: ttypes = (/ 'TIME', 'Char' /), tunits, &
-         tforms = (/ '1D ', '20A' /)  ! 20A20?
-         !tforms = (/ '1D   ', '20A20' /)  ! 20A20?
-         !tforms = (/ '1D   ', '1D   ' /)
-    real(kind=dp8), dimension(2) :: dvalues = (/ 12345.6, 7.89 /) !, d2values = (/ 0.023, 0.0045 /)
-    character(len=20), dimension(2) :: svalues = (/ 'saisho', 'tsugi1' /)
-      !DOUBLE PRECISION    dvalues(2)
+  !    integer unit,bitpix,naxis !status,blocksize,naxes(2)
+  !    character(len=80) :: filename
+  !    logical simple,extend
+  !    integer :: nhdu
+  !    character(len=80), dimension(2) :: ttypes = (/ 'TIME', 'Char' /), tunits, &
+  !       tforms = (/ '1D ', '20A' /)  ! 20A20?
+  !       !tforms = (/ '1D   ', '20A20' /)  ! 20A20?
+  !       !tforms = (/ '1D   ', '1D   ' /)
+  !  real(kind=dp8), dimension(2) :: dvalues = (/ 12345.6, 7.89 /) !, d2values = (/ 0.023, 0.0045 /)
+  !  character(len=20), dimension(2) :: svalues = (/ 'saisho', 'tsugi1' /)
+  !    !DOUBLE PRECISION    dvalues(2)
 !---------- TEST       up to here
 
   !type(t_argv), dimension(:), allocatable :: allargv
@@ -183,100 +181,103 @@ end if
   if (allocated(frfrows)) deallocate(frfrows)
   if (allocated(relrows)) deallocate(relrows)
 
-if (.false.) then
-! ******** write test fits **********
 
-!program writeimage
-      status=0
-! Name of the FITS file to be created:
-filename='!'//'ATESTFILE.FITS'
-! Get an unused Logical Unit Number to use to create the FITS file
-call ftgiou(unit,status)
-! create the new empty FITS file blocksize=1
-call ftinit(unit,filename,blocksize,status)
-call FTGERR(status, errtext)
-call FTGHDN(unit, nhdu)  ! CHDU: Current HDU
-print *,'test-open1-status=',status,' / HDU=',nhdu,' / ',trim(errtext)
 
-!call FTOPEN(unit,filename,1, blocksize,status) ! read-wrte
+
+!if (.false.) then
+!! ******** write test fits **********
+!
+!!program writeimage
+!      status=0
+!! Name of the FITS file to be created:
+!filename='!'//'ATESTFILE.FITS'
+!! Get an unused Logical Unit Number to use to create the FITS file
+!call ftgiou(unit,status)
+!! create the new empty FITS file blocksize=1
+!call ftinit(unit,filename,blocksize,status)
 !call FTGERR(status, errtext)
-!print *,'test-open2-status=',status,' / ',trim(errtext)
-
-! initialize parameters about the FITS image (300 x 200 16-bit integers)
-simple=.true.
-      bitpix=16  ! signed 2-byte, -32: real, -64: double
-      naxis=2
-      naxes(1)=300
-      naxes(2)=200
-extend=.true.
-! write the required header keywords
-call ftphpr(unit,simple,bitpix,0,naxes,0,1,extend,status)
-!call ftphpr(unit,simple,bitpix,naxis,naxes,0,1,extend,status)
-!! initialize the values in the image with a linear ramp function
-!do j=1,naxes(2)
-!          do i=1,naxes(1)
-!              array(i,j)=i+j
-!            end do
-!          end do
-!      
-!! write the array to the FITS file group=1
-!fpixel=1  ! First pixel
-!nelements=naxes(1)*naxes(2)
-!call ftpprj(unit,group,fpixel,nelements,array,status)
-
-! write another optional keyword to the header
-call ftpkyj(unit,'EXPOSURE',1500,'Total Exposure Time',status)
-
-! Extension
-
-!ttypes = (/ 'TIME', 'String' /)
-!tforms = (/ '1D', '20A' /)  ! Double
-!tunits = (/ 'sec', '' /)
-tunits(1) = 'sec'
-tunits(2) = ''
-!dvalues = (/ 12345.6, 7.89 /)
-!svalues = (/ 'saisho', 'tsugi' /)
-
-print *, 'test-svalues =', svalues
-
-!call FTIBIN(unit,nrows,tfields,ttype,tform,tunit,extname,varidat > status) ! nrows should be 0
-call FTIBIN(unit,0,2,ttypes,tforms,tunits,'TestBinExt',.true., status) ! Creates an extension with basic header and moves to it.
-call FTGHDN(unit, nhdu)
-call FTGERR(status, errtext)
-print *,'test-new-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
-call ftpkys(unit,'MY_HEAD','Arbitrary','My comment 01',status)
-
-! Write Table (double precision)
-!FTPCL[SLBIJKEDCM](unit,colnum,frow,felem,nelements,values, > status) ! frow: 1st row?, felem: 1st element?
-call FTPCLD(unit,1,1,1,2,dvalues, status)  ! colnum = 1
-call FTGHDN(unit, nhdu)
-call FTGERR(status, errtext)
-print *,'test-dval-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
-
-call ftpkys(unit,'TDIM2','(20,1)','for Character in Binary table',status)
-call FTPCLS(unit,2,1,1,2,svalues, status)  ! colnum = 2
-!call FTPCLD(unit,2,1,1,2,d2values, status)
-call FTGHDN(unit, nhdu)
-call FTGERR(status, errtext)
-print *,'test-char-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)  ! If wrong, 309  / not an ASCII (A) column
-
-!! call FTMAHD(unit, 2, hdutype, status)           ! Move to the Absolute extention (1st extension if 2)
-!call FTMRHD(unit, 1, hdutype,status) ! nmove==1 ! cMove to a new (existing) HDU forward or backwards relative to the CHDU
+!call FTGHDN(unit, nhdu)  ! CHDU: Current HDU
+!print *,'test-open1-status=',status,' / HDU=',nhdu,' / ',trim(errtext)
+!
+!!call FTOPEN(unit,filename,1, blocksize,status) ! read-wrte
+!!call FTGERR(status, errtext)
+!!print *,'test-open2-status=',status,' / ',trim(errtext)
+!
+!! initialize parameters about the FITS image (300 x 200 16-bit integers)
+!simple=.true.
+!      bitpix=16  ! signed 2-byte, -32: real, -64: double
+!      naxis=2
+!      naxes(1)=300
+!      naxes(2)=200
+!extend=.true.
+!! write the required header keywords
+!call ftphpr(unit,simple,bitpix,0,naxes,0,1,extend,status)
+!!call ftphpr(unit,simple,bitpix,naxis,naxes,0,1,extend,status)
+!!! initialize the values in the image with a linear ramp function
+!!do j=1,naxes(2)
+!!          do i=1,naxes(1)
+!!              array(i,j)=i+j
+!!            end do
+!!          end do
+!!      
+!!! write the array to the FITS file group=1
+!!fpixel=1  ! First pixel
+!!nelements=naxes(1)*naxes(2)
+!!call ftpprj(unit,group,fpixel,nelements,array,status)
+!
+!! write another optional keyword to the header
+!call ftpkyj(unit,'EXPOSURE',1500,'Total Exposure Time',status)
+!
+!! Extension
+!
+!!ttypes = (/ 'TIME', 'String' /)
+!!tforms = (/ '1D', '20A' /)  ! Double
+!!tunits = (/ 'sec', '' /)
+!tunits(1) = 'sec'
+!tunits(2) = ''
+!!dvalues = (/ 12345.6, 7.89 /)
+!!svalues = (/ 'saisho', 'tsugi' /)
+!
+!print *, 'test-svalues =', svalues
+!
+!!call FTIBIN(unit,nrows,tfields,ttype,tform,tunit,extname,varidat > status) ! nrows should be 0
+!call FTIBIN(unit,0,2,ttypes,tforms,tunits,'TestBinExt',.true., status) ! Creates an extension with basic header and moves to it.
 !call FTGHDN(unit, nhdu)
 !call FTGERR(status, errtext)
-!print *,'test-move-status=',status,' / HDU=',nhdu,' / ',trim(errtext)
-
-!call ftphpr(unit,simple,bitpix,0,naxes,0,1,extend,status)
+!print *,'test-new-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
+!call ftpkys(unit,'MY_HEAD','Arbitrary','My comment 01',status)
+!
+!! Write Table (double precision)
+!!FTPCL[SLBIJKEDCM](unit,colnum,frow,felem,nelements,values, > status) ! frow: 1st row?, felem: 1st element?
+!call FTPCLD(unit,1,1,1,2,dvalues, status)  ! colnum = 1
+!call FTGHDN(unit, nhdu)
 !call FTGERR(status, errtext)
-!print *,'test-HD-phpr-status=',status,' / ',trim(errtext)
-
-! close the file and free the unit number
-call ftclos(unit, status)
-call FTGERR(status, errtext)
-print *,'test-close-status=',status,' / ',trim(errtext)
-call ftfiou(unit, status)
-!end
-end if
+!print *,'test-dval-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
+!
+!call ftpkys(unit,'TDIM2','(20,1)','for Character in Binary table',status)
+!call FTPCLS(unit,2,1,1,2,svalues, status)  ! colnum = 2
+!!call FTPCLD(unit,2,1,1,2,d2values, status)
+!call FTGHDN(unit, nhdu)
+!call FTGERR(status, errtext)
+!print *,'test-char-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)  ! If wrong, 309  / not an ASCII (A) column
+!
+!!! call FTMAHD(unit, 2, hdutype, status)           ! Move to the Absolute extention (1st extension if 2)
+!!call FTMRHD(unit, 1, hdutype,status) ! nmove==1 ! cMove to a new (existing) HDU forward or backwards relative to the CHDU
+!!call FTGHDN(unit, nhdu)
+!!call FTGERR(status, errtext)
+!!print *,'test-move-status=',status,' / HDU=',nhdu,' / ',trim(errtext)
+!
+!!call ftphpr(unit,simple,bitpix,0,naxes,0,1,extend,status)
+!!call FTGERR(status, errtext)
+!!print *,'test-HD-phpr-status=',status,' / ',trim(errtext)
+!
+!! close the file and free the unit number
+!call ftclos(unit, status)
+!call FTGERR(status, errtext)
+!print *,'test-close-status=',status,' / ',trim(errtext)
+!call ftfiou(unit, status)
+!!end
+!end if
 
 end program asmmkevt
 

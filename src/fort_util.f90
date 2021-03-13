@@ -38,8 +38,6 @@ contains
   real(kind=8) function rad2deg(rad)
     real(kind=8), intent(in) :: rad
 
-    !PI = 3.141592653589793238462643383279
-    !PI = 3.141592653589793238462643383279502884197169399375105820974944592307816406286 
     rad2deg = rad * 180.0d0/PI
   end function rad2deg
 
@@ -47,8 +45,6 @@ contains
   real(kind=8) function deg2rad(deg)
     real(kind=8), intent(in) :: deg
 
-    !PI = 3.141592653589793238462643383279
-    !PI = 3.141592653589793238462643383279502884197169399375105820974944592307816406286 
     deg2rad = deg * PI/180.0d0
   end function deg2rad
 

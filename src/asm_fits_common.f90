@@ -31,9 +31,6 @@ module asm_fits_common
      & and those in the header are only the best guesses taken from a frame (if&
      & there was any) shortly before and after the period in which the ASM-Mode was on.'
 
-
-  integer, parameter, public :: tfields_asm = 104  !!!!=========== Check!
-
   character(len=max_fits_char), dimension(n_all_fields) :: &
      tmtypes, tmcomms, tmforms, tmunits
 
@@ -49,8 +46,6 @@ module asm_fits_common
   integer, private :: i
 
   DATA tmtypes(1:2) / 'SF_NO2B', 'FRAME_NO' /
-
-  integer, parameter :: tfields_def = 9  ! TFIELDS in the output FITS   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   interface get_onoff_enadis
     module procedure get_onoff_enadis_from_key, get_onoff_enadis_from_tf
@@ -380,17 +375,6 @@ module asm_fits_common
      integer(ip4) :: bitrate  = -999; ! [/s] Telemetry bit rate (F16W66) ! Taken from Telemetry as opposed to FRF
   end type asm_sfrow
 
-!* tmtypes / (TeleMetry-TYPES) Field names derived from Telemetry
-!* tmcomms / (TeleMetry-COMMentS) Comments for outputs for Field names that is derived from Telemetry 
-!* tmforms / (TeleMetry-FORMS) FORMAT to output (and input)
-!* tmunits / (TeleMetry-UNITS) Unit to output
-!* tmnframes / (TeleMetry-I-th-FRAMES) Which n-th frame in n+offset (1 may mean all), eg., 16 for 24n+3 (like 3, 27, 51)
-!* tmoframes / (TeleMetry-I-th-FRAMES) Which offset frame in n+offset (0 may mean all), eg., 3 for 24n+3 (like 3, 27, 51)
-!* tmiiwords / (TeleMetry-I-th-Initial-WORDS) Starting at which word (1..128)
-!* tmifwords / (TeleMetry-I-th-Final-WORDS) End at which word (1..128)
-!* tmiibits / (TeleMetry-I-th-Initial-BITS) Starting at which bit (1..8) (0 means all)
-!* tmifbits / (TeleMetry-I-th-Initial-BITS) End at which bit (1..8) (0 means all)
-!* tmcols / (TeleMetry-COLumnS) Type
 
   ! FITS output header
   type asm_header
@@ -494,57 +478,6 @@ module asm_fits_common
     character(len=max_fits_char) :: type; ! Column Name (=TTYPEn), set by deriving from %prm%root
     type(t_form_unit)           :: prm;  ! TFORM and TUNIT
   end type t_asm_colhead
-
-  !! ASM Table to output as a FITS (i.e., column-based)
-  !!
-  !! (x,y) is (internal-number, row-number); e.g., eulerss(2, 9) is Euler_2 in the 9th row, eulerss(2, :) is the column array of Euler_2
-  !! For asmdatss, dimension(:, nwords_main)
-  !! NOTE: it is faster for Fortran to access eulerss(:, 2) than eulerss(1, :)
-  !type asm_table_col
-  !  real,            dimension(:, :), allocatable :: tstart;
-  !  integer,         dimension(:, :), allocatable :: sfn;  ! i-th SF in the FRF
-  !  integer(kind=1), dimension(:, :), allocatable :: sf_2bit;  ! 2-bit info of the SF in Telemetry
-  !  integer(kind=1), dimension(:, :), allocatable :: i_frame;  ! i-th frame in the current SF
-  !  integer(kind=1), dimension(:, :), allocatable :: fr_6bit; ! Current frame number as recorded in Telemetry
-  !  real(dp),        dimension(:, :), allocatable :: eulers; &
-  !                                                   !angles_intns;  ! Internal angle x,y,z
-  !  integer(kind=1), dimension(:, :), allocatable :: acsss;     ! acss = 3 bytes
-  !  integer(kind=1), dimension(:, :), allocatable :: asmdatss;    ! Main ASM data; Y[1-6](ch[0-15]) for PHA mode, Y[1-6][LH][0-7] for Time mode
-  !end type asm_table_col
-
-  !! Specification of the ASM Table Types in FITS
-  !type t_index_low_high
-  !  integer :: low;
-  !  integer :: high;
-  !end type t_index_low_high
-
-  !! Specification of the ASM Table Types in FITS
-  !type asm_index
-  !  type(t_index_low_high) :: asmdats  = t_index_low_high(1, nwords_main);  ! main ASM data (96)
-  !  type(t_index_low_high) :: tstart   = t_index_low_high(nwords_main+1, nwords_main+1);
-  !  type(t_index_low_high) :: sf_siri  = t_index_low_high(nwords_main+2, nwords_main+2);
-  !  type(t_index_low_high) :: sf_2bit  = t_index_low_high(nwords_main+2, nwords_main+2);
-  !  type(t_index_low_high) :: i_frame  = t_index_low_high(nwords_main+3, nwords_main+3);
-  !  type(t_index_low_high) :: fr_6bit = t_index_low_high(nwords_main+4, nwords_main+4);
-  !  type(t_index_low_high) :: eulers   = t_index_low_high(nwords_main+5, nwords_main+7); ! 3
-  !  type(t_index_low_high) :: angles_intn = t_index_low_high(nwords_main+8, nwords_main+10); ! 3
-  !  type(t_index_low_high) :: acss     = t_index_low_high(nwords_main+11, nwords_main+14); ! acss = 3 bytes
-  !end type asm_index
-
-  !! Specification of the ASM Table in FITS
-  !type asm_table_spec
-  !  type(asm_index) :: i = asm_index();
-  !  type(form_unit) :: tstart   = form_unit('1D', 'MJD');
-  !  type(form_unit) :: sf_siri  = form_unit('1L', '');
-  !  type(form_unit) :: sf_2bit  = form_unit('1J', '');
-  !  type(form_unit) :: i_frame  = form_unit('1J', '');
-  !  type(form_unit) :: fr_6bit  = form_unit('1J', '');
-  !  type(form_unit), dimension(3) :: eulers = form_unit(form='1E', unit='deg');
-  !  !type(form_unit), dimension(3) :: eulers = form_unit('1E', 'deg');
-  !  type(form_unit), dimension(3) :: angles_intn = form_unit('1B', 'deg');  ! Internal angle x,y,z
-  !  type(form_unit), dimension(3) :: acss = form_unit('1B', 'binary');      ! acss = 3 bytes
-  !  type(form_unit), dimension(nwords_main) :: asms = form_unit('1J', 'count');	! Array
-  !end type asm_table_spec
 
   integer, parameter, private :: LEN_TTYPE = 16  ! maximum character length for TFORM (nb., 14 for 'Y23CH15/Y23H07')
 
@@ -1434,43 +1367,6 @@ contains
     return
   end function get_extname
 
-  !! Get ttype character Array
-  !subroutine get_ttypes(tret)
-  !  character(len=max_fits_char), dimension(tfields_asm), intent(out) :: tret
-  !  integer :: i, k, ini = 1
-
-  !  !tret(:) = ''
-  !  !tret(ini) = 'Tstart'
-
-  !  !do i=ini+1, ini+3
-  !  !  write(tret(i), '("Euler", i1)') i
-  !  !  write(tret(i+3), '("F16W", i1)') (i-1)*2+1 ! Internal angle x,y,z
-  !  !end do
-
-  !  !do i=ini+3*2+1, tfields_asm ! to the last one
-  !  !  tret(i) = trim(get_ttype(i-6-ini))
-  !  !end do
-  !end subroutine get_ttypes
-
-  !! Get tform character Array
-  !subroutine get_tforms(tret)
-  !  character(len=max_fits_char), dimension(tfields_asm), intent(out) :: tret
-
-  !  tret(:) = ''
-  !  tret(1:7) = 'E15.8E2'  ! TSTART, Euler x 2
-  !  tret(8:) = 'I1'
-  !end subroutine get_tforms
-
-  !! Get tunit character Array
-  !subroutine get_tunits(tret)
-  !  character(len=max_fits_char), dimension(tfields_asm), intent(out) :: tret
-
-  !  tret(:) = ''
-  !  tret(1) = 's'      ! TSTART
-  !  tret(2:7) = 'deg'  ! Euler x 2
-  !  tret(8:) = 'count'
-  !end subroutine get_tunits
-
   !-----------------------------------------
   ! interface get_ncols_colheads
   !   : to calculate the summed number of (FITS) columns, aka TTYPEs
@@ -1586,20 +1482,6 @@ contains
     ! Justification to redefine it here is you can control what to handle in this subroutine,
     ! independent of (module-wide constant parameter) COL_FORM_UNITS
     character(len=MAX_LEN_FKEY), dimension(:), allocatable :: colhead_keys
-    !character(len=MAX_LEN_FKEY), dimension(9), parameter :: Colhead_keys = [ &
-    !     'main    '&
-    !   , 'Tstart  '&
-    !   , 'Euler   '&
-    !   , 'SFNum   '&
-    !   , 'SF2bits '&
-    !   , 'Fr6bits '&
-    !   , 'i_frame '&
-    !   , 'Status_C'&
-    !   , 'DP_C    '&
-    !   !, 'ACS_C   '&
-    !   !, 'ASM_C   '&
-    !   !, 'bitrate ' &
-    !   ]
     integer, dimension(:), allocatable :: dims  ! Array of t_form_unit%dim corresponding to ckeys
     character(len=max_fits_char) :: ttype ! TTYPE (for temporary use)
     character(len=LEN_READABLE_KEY) :: sk
@@ -1663,90 +1545,9 @@ if (ittype > nsiz) call err_exit_play_safe()
       end select
     end do
 
-!!print *,'DEBUG:523:here023,size=',size(colheads)
-!    ! First 96
-!    do ikey=1, NWORDS_MAIN
-!      sk = 'main'
-!!print *,'DEBUG:524:ikey=',ikey
-!!tmp_cha = get_ttype_main(ikey)
-!!print *,'DEBUG:52X:tmp_cha=',tmp_cha
-!!print *,'DEBUG:525:ttb'
-!!tmp_fu = get_element(sk, COL_FORM_UNITS)
-!!print *,'DEBUG:526:ok'
-!!print *,'DEBUG:527:tmp_fu',trim(tmp_fu%key)
-!      colheads(ikey) = t_asm_colhead(key=sk, type=trim(get_ttype_main(ikey)), prm=get_element(sk, COL_FORM_UNITS))
-!    end do
-!
-!    increment = 0
-!    irow=NWORDS_MAIN+1
-!    do i=2, size(Colhead_keys)
-!      irow = irow + increment
-!      call set_colheads_single(irow, Colhead_keys(i), colheads, increment)
-!    end do
-!!!print *,'DEBUG:533:here033'
-!!    call set_colheads_single(NWORDS_MAIN+1, 'Tstart',   colheads)
-!!!print *,'DEBUG:533:here034'
-!!    call set_colheads_single(NWORDS_MAIN+2, 'SFNum',    colheads)
-!!    call set_colheads_single(NWORDS_MAIN+3, 'SF2bits',  colheads)
-!!    call set_colheads_single(NWORDS_MAIN+4, 'Fr6bits',  colheads)
-!!    call set_colheads_single(NWORDS_MAIN+5, 'i_frame',  colheads)
-!!    call set_colheads_single(NWORDS_MAIN+6, 'Status_C', colheads)
-!!    call set_colheads_single(NWORDS_MAIN+7, 'DP_C',     colheads)
-!!    !call set_colheads_single(NWORDS_MAIN+8, 'ACS_C',    colheads)
-!!    !call set_colheads_single(NWORDS_MAIN+9, 'ASM_C',    colheads)
-!    !call set_colheads_single(NWORDS_MAIN+10, 'bitrate',  colheads)
-!!print *,'DEBUG:633:here133'
-!!call dump_asm_colhead(colheads(1))
-!!call dump_asm_colhead(colheads(8))
-!!print *,'DEBUG:634:here134'
-
     if (allocated(colhead_keys)) deallocate(colhead_keys)
   end function get_colheads
 
-
-  !! Convert an Array of asm_telem_row into asm_out_col
-  !subroutine convert_row2col(rows, frfrows, colout)
-  !  type(asm_telem_row), dimension(:), allocatable, intent(in) :: trows
-  !  type(asm_frfrow), dimension(:), allocatable, intent(in) :: frfrows
-  !  type(asm_table_col),                            intent(out) :: colout
-
-  !  integer :: i, nrows
-
-  !  nrows = size(trows)
-
-  !  allocate( colout%tstarts( 1, nrows) )
-  !  allocate( colout%sfs(     1, nrows) )
-  !  allocate( colout%sf_2bits(1, nrows) )
-  !  allocate( colout%i_frames(1, nrows) )
-  !  allocate( colout%fr_6bits(1, nrows) )
-  !  allocate( colout%eulerss( 3, nrows) )
-  !  allocate( colout%acsss(   3, nrows) )
-  !  allocate( colout%asmdatss(NUM_INSTR*NCHANS_PHA, nrows) )
-
-  !  colout%asmdatss( i, :) = rows(i)%asmdats
-  !  colout%tstarts(  i, 1) = rows(i)%tstart
-  !  !colout%sfs(     i, 1) = rows(i)%sf
-  !  !colout%sf_2bits(i, 1) = rows(i)%sf_2bit
-  !  !colout%i_frames(i, 1) = rows(i)%
-  !  colout%fr_6bits( i, 1) = rows(i)%fr_6bit
-  !  !colout%eulerss( i, :) = rows(i)%eulers
-  !  !colout%acsss(   i, :) = rows(i)%acss
-
-  !  !do i = 1, nrows
-  !  !  colout%asmdatss(   i, :) = rows(i)%asmdats
-  !  !  colout%tstarts(  i, 1) = rows(i)%tstart
-  !  !  !colout%sfs(      i, 1) = rows(i)%sf
-  !  !  !colout%sf_2bits( i, 1) = rows(i)%sf_2bit
-  !  !  !colout%i_frames( i, 1) = rows(i)%
-  !  !  colout%fr_6bits(i, 1) = rows(i)%fr_6bit
-  !  !  colout%eulerss(  i, :) = rows(i)%eulers
-  !  !  !colout%acsss(    i, :) = rows(i)%acss
-  !  !end do
-  !end subroutine convert_row2col
-
-  ! Get (ttype, tform, tunit) character Array
-      !  character(len=64), dimension(:), parameter :: ttype
-      !, tform, tunit, extname, varidat, status)
 
   ! Print the result of calc_proc_stats() to STDOUT
   !
