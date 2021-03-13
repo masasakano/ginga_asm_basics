@@ -277,7 +277,7 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
 !print *,'DEBUG:390: get-init'
     do irowr=1, size(retrows)
       ! Gets the 32nd frame (=64/2, where 64 frames/SF), as its time is the mjds in FRF.
-      irowt = get_telem_row_index_from_fr(NFRAMES_PER_SF/2+1, trows, retrows(irowr)%irowt, retrows(irowr)%nframes) ! defined in asm_fits_common
+      irowt = get_telem_row_index_from_fr(NFRAMES_PER_SF/2, trows, retrows(irowr)%irowt, retrows(irowr)%nframes) ! defined in asm_fits_common
 
 !do irowt=1, min(3, size(retrows))  !! DEBUG
       ! irowf = get_matched_frfrow(trows(irowt)%mjd, frows, irowt)
@@ -460,10 +460,10 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     character(len=32) :: title
 
     kval = -998
-    
+
     irow = get_telem_row_index_from_fr( frn=loc_fwb%f_offset &  ! defined in asm_fits_common
        , trows=trows, istart=sfrow%irowt, nrows=sfrow%nframes)
-    if (irow < 0) then
+    if (irow .le. 0) then
       if (sfrow%with_frf) then
         write(stderr,'(A, I2, A, I5, A, I5, A, I2, A)') 'WARNING: Frame (', loc_fwb%f_offset &
          , ') does not exist in SF=(', sfrow%frf%sfn &
@@ -915,7 +915,7 @@ if (IS_DEBUG()) call dump_type(relrows(5))
           ! call FTTNUL(unit,colnum,tnull > status) ! Define the integer(!) value to be treated as NULL
         end do
 
-      case('Fr6bits', 'FrameNum', 'Status_C', 'DP_C')    
+      case('Fr6bits', 'Status_C', 'DP_C')    
         ! Integer*2, frame-based
         coli(:) = 0
         do irelrow=1, nrelrows  ! Each relrow (=asm_sfrow) number
@@ -929,8 +929,6 @@ if (IS_DEBUG()) call dump_type(relrows(5))
             select case(trim(ckey))
             case('Fr6bits')
               coli(iout) = int(trows(itrow)%fr_6bit, kind=2)
-            case('FrameNum')
-              coli(iout) = int(trows(itrow)%FrameNum, kind=2)
             case('Status_C')    
               coli(iout) = int(trows(itrow)%STAT_OBS, kind=2)
             case('DP_C')    

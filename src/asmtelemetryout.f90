@@ -55,7 +55,7 @@ if (IS_DEBUG()) print *,'DEBUG:003: size(allargv)=',size(allargv)
 
     if ((trim(arg) == '-h') .or. (trim(arg) == '--help')) then
       print *, 'USAGE: asmtelemetryout [-h] Telemetry.fits FRF.fits out.fits KEY1 [Key2 [Key3 ...]]'
-      print *, ' Keys: Tstart|Euler|SFNum|SFNTelem|SF2bits|Fr6bits|FrameNum|i_frame|Status_C|Status_S|DP_C|DP_S' &
+      print *, ' Keys: Tstart|Euler|SFNum|SFNTelem|SF2bits|Fr6bits|i_frame|Status_C|Status_S|DP_C|DP_S' &
                    //'|ACS_C|ASM_C1|ASM_C2|bitrate|ASM_Mode|Slew360|Time_PHA|F56W66B4|'
       call EXIT(0)
     end if

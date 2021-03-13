@@ -314,7 +314,6 @@ end if
       call get_sf4_fr64(irow, telems, sf4, fr64)
       retrows(irow)%sf_2bit = sf4
       retrows(irow)%fr_6bit = fr64
-      retrows(irow)%FrameNum = fr64 + 1
 
       ! Array data for ACS and ASM-in-the-common (2 parts)
       j = w_no('pi_mon', from1=.true.)

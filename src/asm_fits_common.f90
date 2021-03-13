@@ -176,7 +176,7 @@ module asm_fits_common
   !  integer :: asm_dp =  3; ! F8n+4 W66(=DP) B3: ASM Mode (ON/OFF <=> 1/0)
   !  integer :: pha_time = 4; ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
   !  integer :: slew   =  3; ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed)) ! Ref: Table 5.1.12, pp.209
-  !  integer :: asm_stat = 1; ! ON/OFF for ASM F15W65B1  ! (F32n+15, W65(Status)) Table 5.1.12, pp.213
+  !  integer :: asm_stat = 1; ! ON/OFF for ASM  ! (F32n+15, W65(Status)) Table 5.1.12, pp.213
   !  integer :: asa      = 2; ! ON/OFF for ASM-A    F15W65B2
   !  integer :: amc      = 3; ! ON/OFF for ASM-AMC  F15W65B3
   !  integer :: hv1      = 4; ! ENA/DIS for ASM-HV1 F15W65B4
@@ -248,7 +248,6 @@ module asm_fits_common
     integer(kind=ip4) :: w_fi;      ! FI (Frame-Info) (W3; 4th byte) in Telemetry
     integer(kind=ip4) :: sf_2bit;   ! 2-bit info of the SF in Telemetry
     integer(kind=ip4) :: fr_6bit;   ! Current frame number as recorded in Telemetry in 6 bits
-    integer(kind=ip4) :: FrameNum;  ! Frame number (F1-F64, as referred to in Reference), i.e., fr_6bit+1
     integer(kind=ip4) :: i_frame;   ! i-th frame in the current SF
     !real(kind=dp8), dimension(3) :: eulers;   ! Not in the telemetry frame?
     integer(kind=ip4), dimension(DIM_ACS_C) :: acss;        ! acss = 3 bytes (W33-35)
@@ -448,7 +447,7 @@ module asm_fits_common
                         ! i.e., Euler1, Euler2, Euler3 must be in a different variable.
                         ! n.b., for ACS_C, though it is an array, the corresponding TTYPE is only 1, hence dim=1
   end type t_form_unit
-  type(t_form_unit), dimension(20), parameter :: COL_FORM_UNITS = [ &
+  type(t_form_unit), dimension(19), parameter :: COL_FORM_UNITS = [ &
      ! note: I=Int*2, J=Int*4, D=Real*8
        t_form_unit(key='main',     root='',        form='1I', unit='count', comm='Main ASM data', dim=NWORDS_MAIN) & ! Special case: root should be explicitly specified when used. See function get_colheads()
      , t_form_unit(key='Tstart',   root='Tstart',  form='1D', unit='day', comm='Start datetime in MJD') &
@@ -457,7 +456,6 @@ module asm_fits_common
      , t_form_unit(key='SFNTelem', root='SFNTelem',form='1J',  comm='SF number based on Telemetry alone') & ! %sfntelem 
      , t_form_unit(key='SF2bits',  root='SF2bits', form='1I',  comm='2-bit SF from FI in Telemetry') &
      , t_form_unit(key='Fr6bits',  root='Fr6bits', form='1I',  comm='Frame number from FI in Telemetry') &
-     , t_form_unit(key='FrameNum', root='FrameNum', form='1I',  comm='Frame number for F1-F64') &
      , t_form_unit(key='i_frame',  root='i_frame', form='1J',  comm='i-th Frame in Telemetry from 1') &
      , t_form_unit(key='Mode_ASM', root='Mode_ASM', form='1I', comm='F4W66B3 ASM Mode (ON/OFF <=> 1/0)') & ! F8n+4 W66(=DP) B3:  ASM Mode (ON/OFF <=> 1/0)
      , t_form_unit(key='Mode_PHA', root='Mode_PHA', form='1I', comm='F4W66B4 ASM(TIME/PHA <=> 1/0)') & ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
@@ -919,7 +917,8 @@ contains
     tret = t_reason_invalid(key=key, text=rettext)
   end function get_reason_invalid
 
-  ! Returns frame-row-index of type(asm_telem_row) that has the specified frame number
+  ! Returns frame-row-index of type(asm_telem_row) that has the specified frame number like F32,
+  ! with the search starting from a specified row number (istart; counted from 1).
   !
   ! If not found, a negative value is returned.
   ! NOTE: (Fortran Array index (from 1))
@@ -934,8 +933,7 @@ contains
 
     retrow = -999
     do irow=istart, istart+nrows-1
-      !if (frn == trows(irow)%fr_6bit) then
-      if (frn == trows(irow)%FrameNum) then
+      if (frn == trows(irow)%fr_6bit) then
         retrow = irow
         return
       end if
@@ -946,6 +944,7 @@ contains
   !
   ! Find a SF-row object in sfrows from Telemetry-FITS row-number
   !
+  ! If not found, the returned retsfrow%irowt is negative (or possibly zero, if specification changes).
   function get_sfrow_from_telem_row_index(in_rowt, sfrows) result(retsfrow)
     integer, intent(in) :: in_rowt    ! Row number of Telemetry
     type(asm_sfrow), dimension(:), allocatable, intent(in) :: sfrows
@@ -1114,9 +1113,9 @@ contains
     print *, '--------- asm_telem_row (', row%i_frame, ') ---------' 
     write(*,'("TIME: ",I0.2,"-",I0.2," ",I0.2,":",I0.2,":",I0.2,".",I4, "(", F0.4, ") = MJD(",F19.12,")")') &
        row%month, row%day, row%hour, row%minute, row%second, row%millisec_i4, row%second_real, row%mjd
-    write(*,'(" SF(2bit)=",I0.1," Frame(6bit)=",I0.2,"=F",A,' &
+    write(*,'(" SF(2bit)=",I0.1," Frame(6bit)=",I0.2,' &
           //'" Status=",I3,"(=",A,") DP=",I3,"(=",A,")")') &
-         row%sf_2bit, row%fr_6bit, trim(ladjusted_int(row%FrameNum))  &
+         row%sf_2bit, row%fr_6bit  &
        , row%STAT_OBS, trim(char_bin_stat), row%DPID_OBS, trim(char_bin_dp)
   end subroutine dump_asm_telem_row
 
@@ -1907,7 +1906,7 @@ if (ittype > nsiz) call err_exit_play_safe()
       end select
     end if
         
-    call GET_ENVIRONMENT_VARIABLE('DEBUG', env_debug, STATUS=status)
+    call GET_ENVIRONMENT_VARIABLE('GINGA_DEBUG', env_debug, STATUS=status)
     if ((status == 1) .or. (trim(env_debug) == 'false') .or. (trim(env_debug) == 'no')) then  ! 1 for non-existent, 2 for environment var. not-supported by the system
       ret = .false.
       prev_result = 0
