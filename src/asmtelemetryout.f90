@@ -83,9 +83,10 @@ if (IS_DEBUG()) print *,'DEBUG:024: istart_main=',istart_main, ' n_mainarg=',n_m
   !---------------- MAIN ------------------
     
   ! Get telm_rows from the default data with add_mjd2telem(tfhead, telm_rows)
-  call read_telemetry(trim(get_val_from_key('telemetry', allargv)), tfhead, headers, telems) ! tfhead: Telemetry-Fits-HEADer
-  trows = get_telem_raws2types(headers, telems)
-  call add_mjd2telem(tfhead, trows)
+  call mk_telem_rows(trim(get_val_from_key('telemetry', allargv)), tfhead, trows)
+  !call read_telemetry(trim(get_val_from_key('telemetry', allargv)), tfhead, headers, telems) ! tfhead: Telemetry-Fits-HEADer
+  !trows = get_telem_raws2types(headers, telems)
+  !call add_mjd2telem(tfhead, trows)
 
   ! Get the FRF
   call mk_frf_rows(trim(get_val_from_key('FRF', allargv)), frfhead, frfrows)

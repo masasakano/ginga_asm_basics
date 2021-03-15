@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>ginga_asm_basics 解説</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    span.underline{text-decoration: underline;}
+    div.column{display: inline-block; vertical-align: top; width: 50%;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="http://www.wisebabel.com/sites/default/files/styles/pandoc_wb.css" />
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">ginga_asm_basics 解説</h1>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#背景と用語定義"><span class="toc-section-number">1</span> 背景と用語定義</a>
+<ul>
+<li><a href="#gingaのtelemetryデータ構造"><span class="toc-section-number">1.1</span> GingaのTelemetryデータ構造</a>
+<ul>
+<li><a href="#frame-header-16-bytes"><span class="toc-section-number">1.1.1</span> Frame-header (16 bytes)</a></li>
+<li><a href="#frameのメインデータ-128-bytes-ワード"><span class="toc-section-number">1.1.2</span> Frameのメインデータ (128 bytes (=ワード))</a></li>
+</ul></li>
+</ul></li>
+<li><a href="#coding-style"><span class="toc-section-number">2</span> Coding style</a></li>
+<li><a href="#parameters"><span class="toc-section-number">3</span> Parameters</a></li>
+<li><a href="#他の主要type-s-特に読み込んだり計算したデータを保持するもの"><span class="toc-section-number">4</span> 他の主要type-s (特に読み込んだり計算したデータを保持するもの)</a></li>
+<li><a href="#アルゴリズム"><span class="toc-section-number">5</span> アルゴリズム</a></li>
+</ul>
+</nav>
+<section id="背景と用語定義" class="level1" data-number="1">
+<h1 data-number="1"><span class="header-section-number">1</span> 背景と用語定義</h1>
+<p>目的は、GingaのTelemetry FITSを読み込み、対応する Ginga LAC FRFにある姿勢関係情報を付け加えて、ASMデータをFITS tableとして出力すること。</p>
+<ul>
+<li><code>asmmkevt</code> : 本プログラム。ASM-mode がONの時のデータのみ抽出。</li>
+<li><code>asmtelemetryout</code> : 副プログラム。Telemetry FITSにある全データ時間領域について、ただし、指定したパラメーターのテーブルのみ出力(パラメーターを全く与えなければ、<code>asmmkevt</code> と同様に全パラメーターが出力される)。</li>
+</ul>
+<section id="gingaのtelemetryデータ構造" class="level2" data-number="1.1">
+<h2 data-number="1.1"><span class="header-section-number">1.1</span> GingaのTelemetryデータ構造</h2>
+<ol type="1">
+<li>一つのTelemetry FITSあるいは、FRF FITSは、複数の SF を含む。SFは、歴史的理由で(日本語)「サブフレーム」と呼称されるが、事実上の意味は super-frame。1SFがGingaのデータの主要単位。
+<ul>
+<li>各SFには、各FRFにおいて、通し番号 SFn がつけられる(対応するTelemetryにある最初のSFを1として数えている様子だ)。SFn は、各FRFに固有であり、異なるFRF間では同じSFnが存在する。</li>
+</ul></li>
+<li>1 SF は、データが完全である場合は、64 frames からなる。ただし、当時の衛星と基地局との通信事情などにより、データに欠落があって、64個ない場合もあり得る。
+<ul>
+<li>各SFにおいて、i-1番目のFrame番号を Fi と呼称する。iは、0..63。</li>
+</ul></li>
+<li>1 frame は、128 bytes からなり、この各byteを「ワード」と呼称する。各frameにおいて、j-1番目のWord番号を Wj と呼称する。jは、0..127。</li>
+<li>1ワードは、定義上、8 bits からなる。
+<ul>
+<li>最上位bit (MSB)から、最下位bit (LSB)までをそれぞれ Bk (k=0..7) と呼ぶ。すなわち、B0..B7</li>
+<li>すなわち、ワード値が1の時、そのB0は0、B7は1である。この数え方は、Fortran 90 の<code>BTEST()</code>などとは、逆であることに注意。</li>
+</ul></li>
+</ol>
+<p>そして、各SFにおいて、ある特定の Fi のある特定の Wi (そして時には特定の Bk)にのみある特定の意味を持つデータが存在することがある(例: ASMのスイッチが入っているかどうかのフラグ)。</p>
+<p>GingaのTelemetry FITSでは、各frameにそれぞれ16-byte frame-headerを先頭に足したものをrow (行)として、各rowに 16+128=144バイトの並びを保持する。</p>
+<section id="frame-header-16-bytes" class="level3" data-number="1.1.1">
+<h3 data-number="1.1.1"><span class="header-section-number">1.1.1</span> Frame-header (16 bytes)</h3>
+<p>各Frame-headerは、以下の形式になっている。</p>
+<ul>
+<li>Byte00=month</li>
+<li>Byte01=day</li>
+<li>Byte02=hour</li>
+<li>Byte03=minute</li>
+<li>Byte04=second</li>
+<li>Byte05+06=millisecond
+<ul>
+<li><code>millisec = Byte05 * 256 + Byte06</code> (<code>readfits_SF_WD.c</code> による)</li>
+</ul></li>
+<li>Byte07=Counter_A1</li>
+<li>Byte08=Counter_A2</li>
+<li>Byte09=Counter_B1</li>
+<li>Byte10=Counter_B2</li>
+<li>Byte11=real(1) or stored(2)</li>
+<li>Byte12=bit-rate-low(0) or high(1)</li>
+<li>Byte13, 14, 15: not used</li>
+</ul>
+<p>ここで、Bytes00..06の時刻は、</p>
+<blockquote>
+<p>リアルタイムデータの場合、各フレーム（128bytes）の先頭部が地上に到達した時刻</p>
+</blockquote>
+<p>stored の場合は、</p>
+<blockquote>
+<p>プレイバックデータにつきましては、リアルデータの時刻とＴＩカウンタからプレイバックデータＴＩカウンタを元に時刻を計算したもの</p>
+</blockquote>
+<p>になる(大興電子による)。</p>
+<p>すなわち、大雑把に言って、(通信の遅れなどを無視すれば)フレーム開始時刻ということになる。</p>
+<p>なお、その「年」については、Telemetry FITSのFITS Headerに観測日の記載があるので、それを信用する(Telemetry filesのファイル名に現れる数字の最初の4桁の、FRFのファイル名の最初の2桁、も観測年と一致するはずである—年末年始を跨ぐ観測についてどうなるかは知らないが)。なお、念のため、本パッケージのプログラムでは、年末年始を跨いだ観測(Gingaの寿命中、数回あると思われる)についても考慮し、正しく年を推定している。</p>
+</section>
+<section id="frameのメインデータ-128-bytes-ワード" class="level3" data-number="1.1.2">
+<h3 data-number="1.1.2"><span class="header-section-number">1.1.2</span> Frameのメインデータ (128 bytes (=ワード))</h3>
+<p>一方、各frameの標準形式は、中間報告書 Sec.5.5 pp.198 を参照。</p>
+<p>Frame自体は、あくまで(144 bytesではなく) 128 bytes(=ワード)として定義されていることに注意。</p>
+<p>ASM-modeの時のメインデータの構造は、以下に定義されている。</p>
+<ul>
+<li>PHA Mode : Table 5.5.5, pp.233</li>
+<li>Time Modeta: Table 5.5.6, pp.234</li>
+</ul>
+</section>
+</section>
+</section>
+<section id="coding-style" class="level1" data-number="2">
+<h1 data-number="2"><span class="header-section-number">2</span> Coding style</h1>
+<p>必ずしも一貫していないが、以下のスタイルを採用。</p>
+<ul>
+<li>原則として、Fortran 77 の書き方ではなく、Fortran 90 の書き方を採用。</li>
+<li>事実上のグローバル定数(端的には<code>asm_fits_common.f90</code> などで parameter として定義されているもの)は、全て大文字。</li>
+<li>Subroutine/Function内の定数(parameter)は、最初だけ大文字。</li>
+<li>変数やFortran90のコマンドや関数は、原則としてすべて小文字(snake case)。
+<ul>
+<li>ただし、Fortran77の関数(端的には、FITSIOの関数)は、すべて大文字のものが多い。</li>
+</ul></li>
+<li>すべての配列の添字は、1から始まる。</li>
+</ul>
+</section>
+<section id="parameters" class="level1" data-number="3">
+<h1 data-number="3"><span class="header-section-number">3</span> Parameters</h1>
+<p>基本的なパラメーターは、<code>asm_fits_common.f90</code> にある。</p>
+<ul>
+<li>parameter :: <code>OUTFTCOMMENT1</code>: すべてのFITSの第1 extensionの末尾につけられるコメント</li>
+<li><code>type t_telem_word_from0</code>: どのキーワード(例: <code>dp</code>)がどのワードに対応するかを定義(ワード Wi につき、i=0..127)
+<ul>
+<li>parameter :: <code>TELEM_WORD_FROM0</code>: 事実上は、上のtypeを代表するこの定数を使っている。</li>
+</ul></li>
+<li><code>type t_telem_loc</code>: どの情報がどのフレームのどのワード(のどのBit)にあるかを定義。
+<ul>
+<li>parameter :: <code>TELEM_LOC</code>: 事実上は、上のtypeを代表するこの定数を使っている。</li>
+</ul></li>
+<li><code>type t_form_unit</code>: 出力FITSファイルのテーブル関係キーワードのうちで TFORM, TUNIT (のテンプレート)を定義する。
+<ul>
+<li>parameter :: <code>COL_FORM_UNITS</code>: 事実上は、上のtypeを代表するこの定数を使っている。</li>
+</ul></li>
+<li><code>type t_asm_colhead</code>: 出力FITSファイルのテーブル関係キーワードのうちで TTYPE を定義する。
+<ul>
+<li>ほとんどのTTYPEについては、対応する<code>COL_FORM_UNITS</code>のメンバー“root”(および“key”)と一致する。ただし、たとえば“Euler”であれば、<code>COL_FORM_UNITS%root</code>は“Euler”であるのに対し、この変数のメンバー“type”は、“Euler1”, “Euler2”など、具体的に指すもの(そしてFITS fileに出力するもの)によって変わる。</li>
+</ul></li>
+</ul>
+<p>したがって、将来的にたとえばSlew modeのBIT番号を変更したいなどの場合、上のtypesを変更するとよい。</p>
+</section>
+<section id="他の主要type-s-特に読み込んだり計算したデータを保持するもの" class="level1" data-number="4">
+<h1 data-number="4"><span class="header-section-number">4</span> 他の主要type-s (特に読み込んだり計算したデータを保持するもの)</h1>
+<ul>
+<li><code>type asm_telem_row</code>: Telemetry FITSを読んで、各row (つまり16-byte frame-header と 128-byte frameデータ)を解釈して、(typeのメンバーとしての)名前をつけてここに格納。
+<ul>
+<li>Telemetry FITS fileには一個あたり万の単位でframesが存在するので、それらをこのtypeの配列として保持する。変数名は <code>trows</code> を使っていることが多い。</li>
+</ul></li>
+<li><code>type asm_frfrow</code>: FRFを読んで、各SFを解釈して、(typeのメンバーとしての)名前をつけてここに格納。
+<ul>
+<li>FRF FITS fileには一個あたり万の単位でSFsが存在するので、それらをこのtypeの配列として保持する。変数名は <code>frfrows</code> を使っていることが多い(<code>sfrows</code>の場合もあるかも?)。</li>
+<li>FRFを読むには、<code>ginga_tool</code> にあるsubroutines <code>SFCHCK()</code> と <code>GETOAT()</code> を使用。</li>
+</ul></li>
+<li><code>type asm_sfrow</code>: Telemetry FITSから読み込んだ各「SF」について、FRF FITSとマッチングし、両者の関係を保持する “relational” type。
+<ul>
+<li>このtypeの配列の変数名は <code>relrows</code> を使っていることが多い(<code>sfrows</code>の場合もあるかも? —上とconfusingなのだが!)。</li>
+<li>各SFには64 framesあると期待されるため、それが成立するならば、 <code>size(relrows) == size(trows)/64</code></li>
+<li>なお、Telemetry FITSにおいて、Framesが欠けている場合も考慮して SFを完璧に推定するのは(可能だが)難しく、本プログラムでは、完璧は期していない。ただし、1SF内にFramesが欠けている場合は、そのSFのFramesは出力ファイルには全く含めない仕様なので、問題になる可能性は極めて低い(FRFとのマッチングの問題があることが判明したため、当初の目論見のように理論的に可能性がゼロにまではならない)。
+<ul>
+<li>ただし、そもそも Telemetry FITSにおいて、Framesが欠けている場合はもうすでにフィルタリングされているかも知れない。</li>
+</ul></li>
+</ul></li>
+<li><code>type type fits_header</code>: FITS header を表す
+<ul>
+<li>(読み込んだTelemetry/FRF FITSに存在せず)新規に出力するパラメーターに関しては、デフォルトとのコメントもここで定義する。</li>
+</ul></li>
+</ul>
+</section>
+<section id="アルゴリズム" class="level1" data-number="5">
+<h1 data-number="5"><span class="header-section-number">5</span> アルゴリズム</h1>
+<ol type="1">
+<li>主プログラム(<code>asmmkevt.f90</code>, <code>asmtelemetryout.f90</code>)
+<ul>
+<li>コマンドライン引数の処理、出力FITSファイルのopen/closeが主な仕事</li>
+<li>その間に、大雑把に言って以下の二つのmodulesで定義された関数やサブルーチンを呼ぶ。</li>
+</ul></li>
+<li>Module <code>asm_read_telemetry.f90</code>: Telemetry FITS と FRF FITSの読み込み
+<ul>
+<li>読み込んだデータをそれぞれ <code>trows</code> (type <code>asm_telem_row</code>) と <code>frfrows</code> (type <code>asm_frfrow</code>)にセットして返す。
+<ul>
+<li>それぞれのFITS headersも返す。</li>
+<li>subroutines <code>mk_telem_rows()</code>, <code>mk_frf_rows()</code></li>
+</ul></li>
+</ul></li>
+<li>Module <code>asm_fitsout.f90</code>: Telemetry FITS と FRF FITSのマッチングから出力まで
+<ul>
+<li><code>trows</code> と <code>frfrows</code> から <code>relrows</code> (type <code>type asm_sfrow</code>)を作って返す(第1段階)
+<ul>
+<li>function <code>get_asm_sfrow()</code>, subroutine <code>update_asm_sfrow_modes()</code></li>
+</ul></li>
+<li>また、付随するFITS headersのデータから、出力headerを作成して返す(第2段階)
+<ul>
+<li>function <code>get_asm_fits_header()</code></li>
+</ul></li>
+<li>それらと与えられた変数<code>type(t_asm_colhead)</code>に応じて、FITSのheadersとテーブルとを出力する(第3段階)
+<ul>
+<li>subroutine <code>write_asm_evt_fits()</code></li>
+<li><code>asmmkevt.f90</code> の場合は、単純に <code>COL_FORM_UNITS</code>にあるものを(ほぼ?)すべて出力するように、<code>type(t_asm_colhead)</code>を作ってこのmoduleに与える。</li>
+<li><code>asmtelemetryout.f90</code> の場合は、与えられたコマンドライン引数に応じて出力するコラムを選んで<code>type(t_asm_colhead)</code>を作ってこのmoduleに与える。</li>
+</ul></li>
+</ul></li>
+<li>Module <code>asm_fits_common.f90</code>: 上の二つのmodulesの事実上の親となるmodule。基本的なルーチンや共通ルーチンはこちらに定義されている。
+<ul>
+<li>その中で、<code>get_index()</code> (とそのラッパーである<code>get_element()</code>)は、変数を抽象化して、Ruby/PerlのHash (PythonのDictionary)のように扱うためのinterface。実は、Fortran 2008 (gfortranではすでに対応済み)では、組込関数 <code>FINDLOC()</code>として似たような機能が実装されていたことをあとになって知った。</li>
+</ul></li>
+<li>その他のユーティリティModules
+<ul>
+<li><code>asm_aux.f90</code>: Auxiliary functions/subroutines specific in this package (NOT Fortran-generic utility).</li>
+<li><code>err_exit.f90</code>: Error handling routines.</li>
+<li><code>fort_util.f90</code>: General Fortran90 utility routines.</li>
+</ul></li>
+</ol>
+<hr />
+</section>
+</body>
+</html>

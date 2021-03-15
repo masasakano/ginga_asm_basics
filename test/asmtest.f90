@@ -160,13 +160,13 @@ contains
       character(64) :: str;
     end type t_ts_get_ttype
     type(t_ts_get_ttype), dimension(7), parameter :: expecteds = (/&
-         t_ts_get_ttype( 1, 'Y11CH00/Y11L00') &
-       , t_ts_get_ttype( 9, 'Y11CH08/Y11H00') &
-       , t_ts_get_ttype(17, 'Y21CH00/Y21L00') &
-       , t_ts_get_ttype(32, 'Y21CH15/Y21H07') &
-       , t_ts_get_ttype(33, 'Y12CH00/Y12L00') &
-       , t_ts_get_ttype(96, 'Y23CH15/Y23H07') &
-       , t_ts_get_ttype(13, 'Y11CH12/Y11H04') &
+         t_ts_get_ttype( 1, 'Y11CH00_Y11L00') &
+       , t_ts_get_ttype( 9, 'Y11CH08_Y11H00') &
+       , t_ts_get_ttype(17, 'Y21CH00_Y21L00') &
+       , t_ts_get_ttype(32, 'Y21CH15_Y21H07') &
+       , t_ts_get_ttype(33, 'Y12CH00_Y12L00') &
+       , t_ts_get_ttype(96, 'Y23CH15_Y23H07') &
+       , t_ts_get_ttype(13, 'Y11CH12_Y11H04') &
        /)
 
     character(len=99) :: optmsg
@@ -235,9 +235,9 @@ contains
       , assert_equal('Tstart', trim(colheads2(1)%type), trim(subname), 'colheads2(1)%type') &
       , assert_equal('Euler2', trim(colheads2(3)%type), trim(subname), 'colheads2(3)%type') &
       , assert_equal('Euler3', trim(colheads2(4)%type), trim(subname), 'colheads2(4)%type') &
-      , assert_equal('Y11CH00/Y11L00', trim(colheads(1)%type), trim(subname), 'colheads(1)%type') &
-      , assert_equal('Y11CH08/Y11H00', trim(colheads(9)%type), trim(subname), 'colheads(9)%type') &
-      , assert_equal('Y23CH15/Y23H07', trim(colheads(96)%type),trim(subname), 'colheads(96)%type') &
+      , assert_equal('Y11CH00_Y11L00', trim(colheads(1)%type), trim(subname), 'colheads(1)%type') &
+      , assert_equal('Y11CH08_Y11H00', trim(colheads(9)%type), trim(subname), 'colheads(9)%type') &
+      , assert_equal('Y23CH15_Y23H07', trim(colheads(96)%type),trim(subname), 'colheads(96)%type') &
       ]
 
     do j=1, TOT_NTESTS

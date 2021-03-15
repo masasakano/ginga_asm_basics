@@ -120,6 +120,9 @@ contains
     call ftgkyj(funit, frfhead%TOTAL_SF%name, frfhead%TOTAL_SF%val, frfhead%TOTAL_SF%comment, status)
     frfhead%TOTSFFRF%val = frfhead%TOTAL_SF%val
 
+    call ftclos(funit, status)
+    ! call FTGERR(status, errtext)
+    call ftfiou(funit, status)
   end function get_frf_head
 
 

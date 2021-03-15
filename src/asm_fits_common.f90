@@ -24,7 +24,8 @@ module asm_fits_common
   integer, parameter :: LEN_T_INVALID_FMT_KEY = 32
   integer, parameter :: LEN_PROC_STATS = 256
   integer, parameter :: LEN_T_ARGV = 1024
-  real(dp8), parameter :: UNDEF_REAL = -1024.0d0
+  real(dp8),    parameter :: UNDEF_REAL = -1024.0d0
+  integer(ip4), parameter :: UNDEF_INT  = -999
   character(len=*), parameter :: OUTFTCOMMENT1 = 'Created by combining a Ginga telemetry file&
      & and corresponding FRF for the LAC.  However, the LAC FRFs usually lack the data in which&
      & the ASM-Mode is on.  Therefore, no meaningful Euler angles appear in the Table&
@@ -34,14 +35,14 @@ module asm_fits_common
   character(len=max_fits_char), dimension(n_all_fields) :: &
      tmtypes, tmcomms, tmforms, tmunits
 
-  character(len=max_fits_char), dimension(:, :), allocatable :: tmcolss  ! (i-th-column(1:n_all_fields), i-th-row)
-  integer(kind=1),              dimension(:, :), allocatable :: tmcolsi
-  integer,                      dimension(:, :), allocatable :: tmcolsj
-  real(kind=dp),                dimension(:, :), allocatable :: tmcolsd
-  character(len=max_fits_char), dimension(:),    allocatable :: outcolss ! (i-th-row)
-  integer(kind=1),              dimension(:),    allocatable :: outcolsi
-  integer,                      dimension(:),    allocatable :: outcolsj
-  real(kind=dp),                dimension(:),    allocatable :: outcolsd
+  !character(len=max_fits_char), dimension(:, :), allocatable :: tmcolss  ! (i-th-column(1:n_all_fields), i-th-row)
+  !integer(kind=1),              dimension(:, :), allocatable :: tmcolsi
+  !integer,                      dimension(:, :), allocatable :: tmcolsj
+  !real(kind=dp),                dimension(:, :), allocatable :: tmcolsd
+  !character(len=max_fits_char), dimension(:),    allocatable :: outcolss ! (i-th-row)
+  !integer(kind=1),              dimension(:),    allocatable :: outcolsi
+  !integer,                      dimension(:),    allocatable :: outcolsj
+  !real(kind=dp),                dimension(:),    allocatable :: outcolsd
 
   integer, private :: i
 
@@ -115,7 +116,7 @@ module asm_fits_common
   !     : In short, f_multi=[0:63], f_offset=[1:64], word=[0:127], Bit=[0:7] or negative(-999)
   ! "note" is for any comment as you like.
   type t_loc_fwb  ! Type-LOCation-Frame-Word-Bit
-    integer :: f_multi=0, f_offset, word, bit=-999;  ! f_multi=0 means only 1 location. A negative bit is no bit info.
+    integer :: f_multi=0, f_offset, word, bit=UNDEF_INT;  ! f_multi=0 means only 1 location. A negative bit is no bit info.
     character(len=64)   :: name = '';
     character(len=1024) :: note = '';
   end type t_loc_fwb
@@ -135,7 +136,7 @@ module asm_fits_common
       note='(DP) (TIME/PHA <=> 1/0)'); ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
     type(t_loc_fwb) :: MODE_PHA_W56 = t_loc_fwb(f_multi=0, f_offset=56, word=TELEM_WORD_FROM0%dp,     bit=4, &
       note='(DP) (TIME/PHA <=> 1/0), duplicate'); ! F56W66B4  (should be identical to mode_PHA (=F8n+4, W66B4)
-    !integer(ip4) :: mode_real_stored = -999;
+    !integer(ip4) :: mode_real_stored = UNDEF_INT;
     type(t_loc_fwb) :: STAT_ASM  = t_loc_fwb(f_multi=32, f_offset=15, word=TELEM_WORD_FROM0%status, bit=1, &
       note='(Status)'); ! ON/OFF for ASM F15W65B1  ! (F32n+15, W65(Status)) Table 5.1.12, pp.213
     type(t_loc_fwb) :: STAT_ASA  = t_loc_fwb(f_multi=32, f_offset=15, word=TELEM_WORD_FROM0%status, bit=2, &
@@ -213,11 +214,11 @@ module asm_fits_common
        ! B5: F 4
        ! B6: F 2
        ! B7: F 1
-    integer(kind=ip4) :: STAT_OBS = -999; ! W65(=Status)
+    integer(kind=ip4) :: STAT_OBS = UNDEF_INT; ! W65(=Status)
     character(len=8) :: STAT_OBS_B8 = ''; ! String Bit expression of W65(=Status)
        ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed))
        !   Ref1: Table 5.1.12, pp.209
-    integer(kind=ip4) :: DPID_OBS = -999; ! W66(=DP)
+    integer(kind=ip4) :: DPID_OBS = UNDEF_INT; ! W66(=DP)
     character(len=8) :: DPID_OBS_B8 = ''; ! String Bit expression of W66(=DP)
        ! F8n+4 W66(=DP) B3:  ASM Mode (ON/OFF <=> 1/0)
        !   Note: In short, F4 alone should be fine.  In practice, in some SFs,
@@ -225,12 +226,12 @@ module asm_fits_common
        !   Ref1: Table 5.1.11, pp.207 => F8n+4 W66(=DP) describes the Mode
        !   Ref2: Table 5.1.12, pp.214 "MODE" => B3(ASM ON/OFF), B4(ASM TIME/PHA)
        ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
-       !   Note: The same is found at F56W66B4 (but it is ignored).
+       !   Note: The same is found at F56W66B4 (but it is ignored in this code).
        !   Ref2: Table 5.1.12, pp.214 “MODE” => B3(ASM ON/OFF), B4(ASM TIME/PHA)
-    integer(kind=ip4) :: pi_mon = -999; ! W67(=PI_MON)
+    integer(kind=ip4) :: pi_mon = UNDEF_INT; ! W67(=PI_MON)
     integer(kind=ip4), dimension(4) :: asm_w48;  ! (W48-W51)   ignored
     integer(kind=ip4), dimension(4) :: asm_w112; ! (W112-W115) ignored
-       !   Note: PI-MON (W67 in F8n+1,5) also contains a piece of ASM info, but is ignored
+       !   Note: PI-MON (W67 in F8n+1,5) also contains a piece of ASM info, but is ignored in this code
        !   Refs: Interim-Report at Sec.5.1 Item-6b (pp.197), Table 5.1.14, pp.216 (for ASM-Y1/2 CAL-PH/FW[1-3]-PC)
 
     !--- Derived
@@ -344,27 +345,27 @@ module asm_fits_common
   type asm_sfrow
     logical  :: is_valid = .true.; ! if True, this SF is output.
     type(t_reason_invalid) :: reason_invalid = t_reason_invalid(key=''); ! Explanation why it is invalid (maybe output to STDERR).
-    integer(ip4) :: irowt   = -999; ! i-th ROW of Telemetry that is the first one of this SF
-    integer(ip4) :: sf2bits = -999; ! 2-bits SF in 16-byte Telemetry row header
-    integer(ip4) :: nframes = -999; ! Number of FRAMES
+    integer(ip4) :: irowt   = UNDEF_INT; ! i-th ROW of Telemetry that is the first one of this SF
+    integer(ip4) :: sf2bits = UNDEF_INT; ! 2-bits SF in 16-byte Telemetry row header
+    integer(ip4) :: nframes = UNDEF_INT; ! Number of FRAMES
     logical  :: with_frf = .false.; ! if True, %frf is valid.
-    integer(ip4) :: irowf   = -999; ! i-th ROW of the original FRF-Array; -1 shall be set when with_frf is determined to be .false.
+    integer(ip4) :: irowf   = UNDEF_INT; ! i-th ROW of the original FRF-Array; -1 shall be set when with_frf is determined to be .false.
     type(asm_frfrow) :: frf = asm_frfrow(); ! -1 shall be (though not guaranteeed) set for %sfn and %lostf if with_frf is .false. 
-       !integer(ip4) :: sfn     = -999; ! SF Number in FRF determined by SIRIUS
-       !integer(ip4) :: lostf   = -999; ! number of LOST Frames (wrong "SYNC")
-    integer(ip4) :: sfntelem  = -999; ! (guessed) SF Number based on the telemetry alone
-    integer(ip4) :: mode_asm  = -999; ! F8n+4 W66(=DP) B3: ASM Mode (ON/OFF <=> 1/0)
-    integer(ip4) :: mode_slew = -999; ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed)) ! Ref: Table 5.1.12, pp.209
-    integer(ip4) :: mode_PHA  = -999; ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
-    integer(ip4) :: mode_PHA_W56 = -999; ! F56W66B4  (should be identical to mode_PHA (=F8n+4, W66B4)
-    !integer(ip4) :: mode_real_stored = -999;
-    integer(ip4) :: stat_asm_b = -999; ! ON/OFF for ASM F15W65B1  ! (F32n+15, W65(Status)) Table 5.1.12, pp.213 ! "_b" for bit information (1 or 0)
-    integer(ip4) :: stat_asa_b = -999; ! ON/OFF for ASM-A    F15W65B2
-    integer(ip4) :: stat_amc_b = -999; ! ON/OFF for ASM-AMC  F15W65B3
-    integer(ip4) :: stat_hv1_b = -999; ! ENA/DIS for ASM-HV1 F15W65B4
-    integer(ip4) :: stat_hv2_b = -999; ! ENA/DIS for ASM-HV2 F15W65B5
-    integer(ip4) :: stat_rbm_b = -999; ! ENA/DIS for ASM-RBM F15W65B6
-    integer(ip4) :: stat_bdr_b = -999; ! ENA/DIS for ASM-BDR F15W65B7
+       !integer(ip4) :: sfn     = UNDEF_INT; ! SF Number in FRF determined by SIRIUS
+       !integer(ip4) :: lostf   = UNDEF_INT; ! number of LOST Frames (wrong "SYNC")
+    integer(ip4) :: sfntelem  = UNDEF_INT; ! (guessed) SF Number based on the telemetry alone
+    integer(ip4) :: mode_asm  = UNDEF_INT; ! F8n+4 W66(=DP) B3: ASM Mode (ON/OFF <=> 1/0)
+    integer(ip4) :: mode_slew = UNDEF_INT; ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed)) ! Ref: Table 5.1.12, pp.209
+    integer(ip4) :: mode_PHA  = UNDEF_INT; ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
+    integer(ip4) :: mode_PHA_W56 = UNDEF_INT; ! F56W66B4  (should be identical to mode_PHA (=F8n+4, W66B4)
+    !integer(ip4) :: mode_real_stored = UNDEF_INT;
+    integer(ip4) :: stat_asm_b = UNDEF_INT; ! ON/OFF for ASM F15W65B1  ! (F32n+15, W65(Status)) Table 5.1.12, pp.213 ! "_b" for bit information (1 or 0)
+    integer(ip4) :: stat_asa_b = UNDEF_INT; ! ON/OFF for ASM-A    F15W65B2
+    integer(ip4) :: stat_amc_b = UNDEF_INT; ! ON/OFF for ASM-AMC  F15W65B3
+    integer(ip4) :: stat_hv1_b = UNDEF_INT; ! ENA/DIS for ASM-HV1 F15W65B4
+    integer(ip4) :: stat_hv2_b = UNDEF_INT; ! ENA/DIS for ASM-HV2 F15W65B5
+    integer(ip4) :: stat_rbm_b = UNDEF_INT; ! ENA/DIS for ASM-RBM F15W65B6
+    integer(ip4) :: stat_bdr_b = UNDEF_INT; ! ENA/DIS for ASM-BDR F15W65B7
     !character(len=max_fits_char) :: stat_asm = ''; ! ON/OFF for ASM F15W65B1  ! (F32n+15, W65(Status)) Table 5.1.12, pp.213
     !character(len=max_fits_char) :: stat_asa = ''; ! ON/OFF for ASM-A    F15W65B2
     !character(len=max_fits_char) :: stat_amc = ''; ! ON/OFF for ASM-AMC  F15W65B3
@@ -372,7 +373,7 @@ module asm_fits_common
     !character(len=max_fits_char) :: stat_hv2 = ''; ! ENA/DIS for ASM-HV2 F15W65B5
     !character(len=max_fits_char) :: stat_rbm = ''; ! ENA/DIS for ASM-RBM F15W65B6
     !character(len=max_fits_char) :: stat_bdr = ''; ! ENA/DIS for ASM-BDR F15W65B7
-     integer(ip4) :: bitrate  = -999; ! [/s] Telemetry bit rate (F16W66) ! Taken from Telemetry as opposed to FRF
+     integer(ip4) :: bitrate  = UNDEF_INT; ! [/s] Telemetry bit rate (F16W66) ! Taken from Telemetry as opposed to FRF
   end type asm_sfrow
 
 
@@ -443,53 +444,51 @@ module asm_fits_common
      , t_form_unit(key='i_frame',  root='i_frame', form='1J',  comm='i-th Frame in Telemetry from 1') &
      , t_form_unit(key='Mode_ASM', root='Mode_ASM', form='1I', comm='F4W66B3 ASM Mode (ON/OFF <=> 1/0)') & ! F8n+4 W66(=DP) B3:  ASM Mode (ON/OFF <=> 1/0)
      , t_form_unit(key='Mode_PHA', root='Mode_PHA', form='1I', comm='F4W66B4 ASM(TIME/PHA <=> 1/0)') & ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
-    !   !   Note: The same is found at F56W66B4 (but it is ignored).
+       !   Note: The same is found at F56W66B4 (but it is ignored in this code).
      , t_form_unit(key='ModeSlew', root='ModeSlew', form='1I', comm='F10W65B3 ASM Slew360') & ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed))
      , t_form_unit(key='Status_C', root='Status_C',form='1I', comm='STATUS (W65) in every Frame') &
      , t_form_unit(key='Status_S', root='Status_S',form='8A', comm='STATUS (W65-8bit) in every Frame') &
+       ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed))
+       !   Ref1: Table 5.1.12, pp.209
      , t_form_unit(key='DP_C',     root='DP_C',    form='1I', comm='DP (W66) in every Frame') &
      , t_form_unit(key='DP_S',     root='DP_S',    form='8A', comm='DP (W66-8bit) in every Frame') &
+       ! F8n+4 W66(=DP) B3:  ASM Mode (ON/OFF <=> 1/0)
+       !   Note: In short, F4 alone should be fine.  In practice, in some SFs,
+       !         F4 may be missing.  In this code, such frames should be discarded.
+       !   Ref1: Table 5.1.11, pp.207 => F8n+4 W66(=DP) describes the Mode
+       !   Ref2: Table 5.1.12, pp.214 "MODE" => B3(ASM ON/OFF), B4(ASM TIME/PHA)
+       ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
+       !   Note: The same is found at F56W66B4 (but it is ignored in this code).
+       !   Ref2: Table 5.1.12, pp.214 “MODE” => B3(ASM ON/OFF), B4(ASM TIME/PHA)
      , t_form_unit(key='ACS_C',    root='ACS_C',   form='1I', comm='ACS (W33-35) in every frame', dim=DIM_ACS_C) &  ! dim=3 ! asm_telem_row%acss
      , t_form_unit(key='ASM1_C',   root='ASM1_C',  form='1I', comm='ASM W48-51 in every Frame', dim=DIM_ASM_C) &  ! dim=4 ! asm_telem_row%asm1_commons
      , t_form_unit(key='ASM2_C',   root='ASM2_C',  form='1I', comm='ASM W112-115 in every Frame', dim=DIM_ASM_C) &  ! dim=4 ! asm_telem_row%asm2_commons
      , t_form_unit(key='bitrate',  root='bitrate', form='1I', comm='Bitrate') &
      ]
-    !integer(kind=ip4) :: STAT_OBS = -999; ! W65(=Status)
-    !   ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed))
-    !   !   Ref1: Table 5.1.12, pp.209
-    !integer(kind=ip4) :: DPID_OBS = -999; ! W66(=DP)
-    !   ! F8n+4 W66(=DP) B3:  ASM Mode (ON/OFF <=> 1/0)
-    !   !   Note: In short, F4 alone should be fine.  In practice, in some SFs,
-    !   !         F4 may be missing.  In this code, such frames should be discarded.
-    !   !   Ref1: Table 5.1.11, pp.207 => F8n+4 W66(=DP) describes the Mode
-    !   !   Ref2: Table 5.1.12, pp.214 "MODE" => B3(ASM ON/OFF), B4(ASM TIME/PHA)
-    !   ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
-    !   !   Note: The same is found at F56W66B4 (but it is ignored).
-    !   !   Ref2: Table 5.1.12, pp.214 “MODE” => B3(ASM ON/OFF), B4(ASM TIME/PHA)
 
   ! Each column header info of the ASM Table to output as a FITS (i.e., column-based)
   !
   ! 1. An array of this type represents the info of the output FITS table data.
   ! 2. The index of the array represents the number of the talbe column, eg, TTYPE23
   ! 3. The array is created dynamically, rather than specified as a PARAMETER,
-  !    because 'Y6CH15/Y6H07' etc is too awkward to be hard-coded.
+  !    because 'Y6CH15_Y6H07' etc is too awkward to be hard-coded.
   type t_asm_colhead
     character(len=LEN_READABLE_KEY) :: key; ! (internal) key for relating this to others
     character(len=max_fits_char) :: type; ! Column Name (=TTYPEn), set by deriving from %prm%root
     type(t_form_unit)           :: prm;  ! TFORM and TUNIT
   end type t_asm_colhead
 
-  integer, parameter, private :: LEN_TTYPE = 16  ! maximum character length for TFORM (nb., 14 for 'Y23CH15/Y23H07')
+  integer, parameter, private :: LEN_TTYPE = 16  ! maximum character length for TFORM (nb., 14 for 'Y23CH15_Y23H07')
 
   type fhead1i4
-    integer(kind=ip4) :: val  = -999; ! eg., 40256
+    integer(kind=ip4) :: val  = UNDEF_INT; ! eg., 40256
     character(len=8)  :: name = '' ; ! eg., 'NAXIS2'
     character(len=max_fits_char) :: comment = '' ; ! eg., 'number of rows in table'
     !character(len=1)  :: fmt = 'I';
   end type fhead1i4
 
   type fhead1r8
-    real(kind=dp8)    :: val  = -999.0d0; ! 8.3e05
+    real(kind=dp8)    :: val  = UNDEF_REAL; ! eg., 8.3e05
     character(len=8)  :: name = '' ; ! eg., 'DEC_2000'  
     character(len=max_fits_char) :: comment = '' ; ! eg., 'Declination in J2000'
     !character(len=1)  :: fmt = 'D';
@@ -512,7 +511,7 @@ module asm_fits_common
   type fits_header
     ! If the name contains '__', it should be replaced with '-' as the FITS header name.
     ! -- Telemetry FITS ------------
-    !! e.g., integer(kind=ip4) :: NAXIS =-999; ! 2 / 2-dimensional binary table
+    !! e.g., integer(kind=ip4) :: NAXIS =UNDEF_INT; ! 2 / 2-dimensional binary table
     type(fhead1i4) :: NAXIS   = fhead1i4(name='NAXIS',   comment='2-dimensional binary table');
     type(fhead1i4) :: NAXIS1  = fhead1i4(name='NAXIS1',  comment='width of table in bytes');       !   144
     type(fhead1i4) :: NAXIS2  = fhead1i4(name='NAXIS2',  comment='number of rows in table');       ! 40256
@@ -679,7 +678,7 @@ contains
       end if
     end do
 
-    iret = -999
+    iret = UNDEF_INT
     if (.not. is_silent) write(stderr,'(A)') 'WARNING: (get_index_char) Index is not found for key="'//trim(key)//'"'
   end function get_index_char
 
@@ -695,7 +694,7 @@ contains
       end if
     end do
     write(stderr,'(A)') 'WARNING: (get_index_argv) Index is not found for key="'//trim(key)//'"'
-    iret = -999
+    iret = UNDEF_INT
   end function get_index_argv
 
 
@@ -738,7 +737,7 @@ contains
       end if
     end do
     write(stderr,'(A)') 'WARNING: (get_index_colhead) Index is not found for key="'//trim(key)//'"'
-    iret = -999
+    iret = UNDEF_INT
   end function get_index_colhead
 
   integer function get_index_form_unit(key, ary, silent) result(iret)
@@ -762,7 +761,7 @@ contains
       end if
     end do
 
-    iret = -999
+    iret = UNDEF_INT
     if (.not. is_silent) write(stderr,'("WARNING: (",A,") Index is not found for key=''",A,"''")') &
        subname, trim(key)
   end function get_index_form_unit
@@ -864,7 +863,7 @@ contains
     integer :: retrow ! to return
     integer :: irow
 
-    retrow = -999
+    retrow = UNDEF_INT
     do irow=istart, istart+nrows-1
       if (frn == trows(irow)%fr_6bit) then
         retrow = irow
@@ -927,7 +926,7 @@ contains
     case('asm2_commons')  ! The first word
       iret = TELEM_WORD_FROM0%asm2_commons
     case default
-      iret = -999
+      iret = UNDEF_INT
     end select
 
     iret = iret + add1
@@ -962,8 +961,8 @@ contains
     end if
 
     iframe = 0  ! Default (basically, any frame)
-    iword = -999
-    ibit  = -999
+    iword = UNDEF_INT
+    ibit  = UNDEF_INT
     if (     trim(name) == 'fi') then
       iword = w_no('fi', fr1)
     else if (trim(name) == 'dp') then
@@ -1120,7 +1119,7 @@ contains
          trim(get_onoff_enadis(row%stat_asm_b, 'asm')), trim(get_onoff_enadis(row%stat_hv1_b, 'hv1')) &
        , trim(get_onoff_enadis(row%stat_rbm_b, 'rbm'))
 
-    ! integer(ip4) :: bitrate  = -999; ! [/s] Telemetry bit rate (F16W66) ! Taken from Telemetry as opposed to FRF
+    ! integer(ip4) :: bitrate  = UNDEF_INT; ! [/s] Telemetry bit rate (F16W66) ! Taken from Telemetry as opposed to FRF
   end subroutine dump_asm_sfrow
 
   subroutine dump_form_unit(fu, with_indent)
@@ -1269,11 +1268,11 @@ contains
   !
   ! Examples:
   !
-  !   TFORM1= 'Y11CH00/Y11L00',
-  !   TFORM17='Y21CH00/Y21L00',
-  !   TFORM32='Y21CH15/Y21H07',
-  !   TFORM33='Y12CH00/Y12L00',
-  !   TFORM96='Y23CH15/Y23H07',
+  !   TFORM1= 'Y11CH00_Y11L00',
+  !   TFORM17='Y21CH00_Y21L00',
+  !   TFORM32='Y21CH15_Y21H07',
+  !   TFORM33='Y12CH00_Y12L00',
+  !   TFORM96='Y23CH15_Y23H07',
   !
   character(len=LEN_TTYPE) function get_ttype_main(index) result(ret)
     implicit none
@@ -1298,7 +1297,7 @@ contains
     icht   = mod(ichp,  NCHANS_PHA/2)             ! CH0--CH07 for TIME-mode (0..7)
 
     if (.true.) then  ! set it .false. when memory trouble is rampant...
-      write(ret, '("Y", I1, I1, "CH", I0.2, "/Y", I1, I1, A1, I0.2)') &
+      write(ret, '("Y", I1, I1, "CH", I0.2, "_Y", I1, I1, A1, I0.2)') &
          iy1, ifw, ichp, iy1, ifw, low_high, icht
       return
     end if
@@ -1337,7 +1336,7 @@ contains
 !print *,'DEBUG:643-1, icht=', icht, ' cicht=',cicht
         !write(cicht, '(I0.2)') icht
 !print *,'DEBUG:644:bef_wri,iy1=',iy1,' ifw=',ifw,' ichp=',ichp
-    ret = 'Y'//ciy1//cifw//'CH'//cichp//'/Y'//ciy1//low_high//cicht
+    ret = 'Y'//ciy1//cifw//'CH'//cichp//'_Y'//ciy1//low_high//cicht
 !print *,'DEBUG:644-1:bef_wri,ret=',ret
   end function get_ttype_main
 
@@ -1386,7 +1385,7 @@ contains
       ind = get_index(trim(ckeys(i)), COL_FORM_UNITS)
       if (ind < 0) then
         ! NOT found
-        nframes = -999
+        nframes = UNDEF_INT
         return
       end if
       nframes = nframes + COL_FORM_UNITS(ind)%dim
@@ -1451,7 +1450,7 @@ contains
 !print *,'DEBUG:424:i=',i
     if (i < 0) then
       ! No column is found!
-      index_last = -999
+      index_last = UNDEF_INT
       write(stderr, '(A)') 'WARNING(set_colheads_single): Key='//trim(key)//' is not defined in COL_FORM_UNITS.'
 !call err_exit_with_msg(msg)
       return
@@ -1631,7 +1630,7 @@ if (ittype > nsiz) call err_exit_play_safe()
              (trim(val) == 'DIS') .or. (trim(val) == 'dis')) then
       iret = 0
     else
-      iret = -999
+      iret = UNDEF_INT
       !write(stderr,'(A)') 'FATAL: Neither ON/OFF nor ENA/DIS: "'//trim(val)//'"'
       !call EXIT(1)  ! for gfortran, Lahey Fujitsu Fortran 95, etc
     end if

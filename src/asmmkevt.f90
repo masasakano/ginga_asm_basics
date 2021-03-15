@@ -28,10 +28,9 @@ program asmmkevt
   !character(len=30) :: errtext  ! for FTGERR(status, errtext)
 
   integer :: funit, status=-999 !, blocksize, hdutype, nframes, naxis1
-  !integer, dimension(Maxaxes) :: naxes
 
   type(fits_header) :: tfhead, outhead
-  integer(kind=1), dimension(:, :), allocatable :: headers, telems !  (word, row)
+  ! integer(kind=1), dimension(:, :), allocatable :: headers, telems !  (word, row)
   type(asm_telem_row), dimension(:), allocatable :: trows
 
   type(fits_header) :: frfhead
@@ -152,14 +151,15 @@ if (IS_DEBUG()) WRITE (*,*) 'fname=' // TRIM(fname)
   !---------------- MAIN ------------------
     
   ! Get telm_rows from the default data with add_mjd2telem(tfhead, telm_rows)
-  call read_telemetry(trim(get_val_from_key('telemetry', argv)), tfhead, headers, telems) ! tfhead: Telemetry-Fits-HEADer
-if (IS_DEBUG()) then ! in asm_fits_common
-call dump_type(tfhead, 1) !! DEBUG
-end if
-  trows = get_telem_raws2types(headers, telems)
-  call add_mjd2telem(tfhead, trows)
-  if (allocated(headers)) deallocate(headers)
-  if (allocated(telems)) deallocate(telems)
+  call mk_telem_rows(fname, tfhead, trows)
+!  call read_telemetry(trim(get_val_from_key('telemetry', argv)), tfhead, headers, telems) ! tfhead: Telemetry-Fits-HEADer
+!if (IS_DEBUG()) then ! in asm_fits_common
+!call dump_type(tfhead, 1) !! DEBUG
+!end if
+!  trows = get_telem_raws2types(headers, telems)
+!  call add_mjd2telem(tfhead, trows)
+!  if (allocated(headers)) deallocate(headers)
+!  if (allocated(telems)) deallocate(telems)
 
   ! Get the FRF
   !call mk_frf_rows(trim(frffil), frfhead, frfrows)

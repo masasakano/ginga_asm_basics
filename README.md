@@ -55,3 +55,9 @@ You may set the environmental variable `GINGA_DEBUG` for testing.  Some diagnost
 * `err_exit.f90`: Error handling routines.
 * `fort_util.f90`: General Fortran90 utility routines.
 
+## Further read ##
+
+* [Detailed description](doc/DESCRIPTION.ja.html) in Japanese: <doc/DESCRIPTION.ja.html>
+  * Its document source file: <doc/DESCRIPTION.ja.md>
+  * Run `make doc` at the top directory to generate/update it; it assumes `pandoc` exists in your command-search path.
+
