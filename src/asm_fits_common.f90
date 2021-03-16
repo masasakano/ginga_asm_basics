@@ -465,7 +465,7 @@ module asm_fits_common
      , t_form_unit(key='ACS_C',    root='ACS_C',   form='1I', comm='ACS (W33-35) in every frame', dim=DIM_ACS_C) &  ! dim=3 ! asm_telem_row%acss
      , t_form_unit(key='ASM1_C',   root='ASM1_C',  form='1I', comm='ASM W48-51 in every Frame', dim=DIM_ASM_C) &  ! dim=4 ! asm_telem_row%asm1_commons
      , t_form_unit(key='ASM2_C',   root='ASM2_C',  form='1I', comm='ASM W112-115 in every Frame', dim=DIM_ASM_C) &  ! dim=4 ! asm_telem_row%asm2_commons
-     , t_form_unit(key='bitrate',  root='bitrate', form='1I', comm='Bitrate') &
+     , t_form_unit(key='bitrate',  root='bitrate', form='1I', comm='Telemetry bitrate info (F16W66)') &
      ]
 
   ! Each column header info of the ASM Table to output as a FITS (i.e., column-based)
@@ -553,8 +553,31 @@ module asm_fits_common
     type(fhead1i4) :: SSTARTMS= fhead1i4(name='SSTARTMS', comment='Start SF of Slew360 Mode'); ! 12345
     type(fhead1i4) :: SENDMS  = fhead1i4(name='SENDMS'  , comment='End SF of Slew360 Mode');   ! 66666
     type(fhead1tf) :: EXISTDAT= fhead1tf(val=.true., name='EXISTDAT', comment='True if the file contains data'); ! T
-    type(fhead1r8) :: EQUINOX = fhead1r8(val=1950.0d0, name='EQUINOX', comment='Equinox of any coordinates'); ! 1950.0
+    type(fhead1r8) :: EQUINOX = fhead1r8(val=1950.0d0, name='EQUINOX', comment='Equinox of the coordinates'); ! 1950.0
+
+    type(fhead1i4) :: SFRAMES = fhead1i4(name='SFRAMES',  comment='Number of SFs in the file'); ! 10000  ! Note: "TOTAL_SF" in the FRF file.
+    type(fhead1i4) :: NROWSTEL= fhead1i4(name='NROWSTEL',  comment='Number of rows in orig Telemetry'); ! 50000  ! Note: number of rows = number of Frames (in the original Telemetry file)
+    type(fhead1i4) :: MODE__OBS=fhead1i4(name='MODE-OBS', comment='F8N+4 W66');
+    type(fhead1i4) :: STAT__OBS=fhead1i4(name='STAT-OBS', comment='F32N+15 W65');
+    type(fhead1i4) :: DPID__OBS=fhead1i4(name='DPID-OBS', comment='F15N+16 W66');
+    type(fhead1i4) :: MODE__B3 =fhead1i4(name='MODE-B3' , comment='1/0 for ASM Mode ''ON/OFF'''); !   1
+    type(fhead1i4) :: MODE__B4 =fhead1i4(name='MODE-B4' , comment='1/0 for ASM-Time/PHA modes');  !   1
+    type(fhead1i4) :: MODE__F56=fhead1i4(name='MODE-F56', comment='1/0 for ASM-Time/PHA modes in F56/W66 Bit 4'); ! 1
+                                  ! COMMENT If negative, the frame does not exist. => the frame is discarded
+
+    type(fhead1i4) :: ROW4STAT= fhead1i4(name='ROW4STAT', comment='Original Telemetry row number for STAT-*');
+    type(fhead1ch) :: STAT__ASM=fhead1ch(name='STAT-ASM', comment='''ON'' or ''OFF'' at start');  ! 'ON' 
+    type(fhead1ch) :: STAT__ASA=fhead1ch(name='STAT-ASA', comment='''ON'' or ''OFF'' for ASMA at start'); ! 'ON'
+    type(fhead1ch) :: STAT__AMC=fhead1ch(name='STAT-AMC', comment='''ON'' or ''OFF'' at start');  ! 'OFF'
+    type(fhead1ch) :: STAT__HV1=fhead1ch(name='STAT-HV1', comment='''ENA'' or ''DIS'' at start'); ! 'ENA'
+    type(fhead1ch) :: STAT__HV2=fhead1ch(name='STAT-HV2', comment='''ENA'' or ''DIS'' at start'); ! 'ENA'
+    type(fhead1ch) :: STAT__RBM=fhead1ch(name='STAT-RBM', comment='''ENA'' or ''DIS'' at start'); ! 'ENA'
+    type(fhead1ch) :: STAT__BDR=fhead1ch(name='STAT-BDR', comment='''ENA'' or ''DIS'' at start'); ! 'DIS'
+   !type(fhead1i4) :: BITRATE0= fhead1i4(name='BITRATE0', comment='[/s] Initial telemetry bit rate');   ! 32
+
+    type(fhead1i4) :: FRFSFN_S= fhead1i4(name='FRFSFN_S', comment='FRF-SFNumber for Euler_S'); ! 156
     type(fhead1r8) :: FRFMJD_S= fhead1r8(name='FRFMJD_S', comment='[day] Central SF time for Euler_S'); ! -7.12345678E-2
+    type(fhead1i4) :: FRFSFN_E= fhead1i4(name='FRFSFN_E', comment='FRF-SFNumber for Euler_E'); ! 234
     type(fhead1r8) :: FRFMJD_E= fhead1r8(name='FRFMJD_E', comment='[day] Central SF time for Euler_E'); ! -7.12345678E-2
     type(fhead1r8) :: EULER_S1= fhead1r8(name='EULER_S1', comment='[deg] Euler 1 before ASM Mode'); ! -7.12345678E-2
     type(fhead1r8) :: EULER_S2= fhead1r8(name='EULER_S2', comment='[deg] Euler 2 before ASM Mode'); ! -7.12345678E-2
@@ -596,22 +619,6 @@ module asm_fits_common
     type(fhead1r8) :: ELVYS_E = fhead1r8(name='ELVYS_E', comment='[deg] Elevation in Y-axis after ASM Mode'); ! -7.12345678E-2
     type(fhead1i4) :: EFLAGS_S= fhead1i4(name='EFLAGS_S', comment='EFLAGS(0-2) before ASM Mode'); ! -7.12345678E-2
     type(fhead1i4) :: EFLAGS_E= fhead1i4(name='EFLAGS_E', comment='EFLAGS(0-2) after ASM Mode'); ! -7.12345678E-2
-    type(fhead1i4) :: MODE__OBS=fhead1i4(name='MODE-OBS', comment='F8N+4 W66');
-    type(fhead1i4) :: STAT__OBS=fhead1i4(name='STAT-OBS', comment='F32N+15 W65');
-    type(fhead1i4) :: DPID__OBS=fhead1i4(name='DPID-OBS', comment='F15N+16 W66');
-    type(fhead1i4) :: MODE__B3 =fhead1i4(name='MODE-B3' , comment='1/0 for ASM Mode ''ON/OFF'''); !   1
-    type(fhead1i4) :: MODE__B4 =fhead1i4(name='MODE-B4' , comment='1/0 for ASM-Time/PHA modes');  !   1
-    type(fhead1i4) :: MODE__F56=fhead1i4(name='MODE-F56', comment='1/0 for ASM-Time/PHA modes in F56/W66 Bit 4'); ! 1
-                                  ! COMMENT If negative, the frame does not exist. => the frame is discarded
-    type(fhead1ch) :: STAT__ASM=fhead1ch(name='STAT-ASM', comment='''ON'' or ''OFF'' at start');  ! 'ON' 
-    type(fhead1ch) :: STAT__ASA=fhead1ch(name='STAT-ASA', comment='''ON'' or ''OFF'' for ASMA at start'); ! 'ON'
-    type(fhead1ch) :: STAT__AMC=fhead1ch(name='STAT-AMC', comment='''ON'' or ''OFF'' at start');  ! 'OFF'
-    type(fhead1ch) :: STAT__HV1=fhead1ch(name='STAT-HV1', comment='''ENA'' or ''DIS'' at start'); ! 'ENA'
-    type(fhead1ch) :: STAT__HV2=fhead1ch(name='STAT-HV2', comment='''ENA'' or ''DIS'' at start'); ! 'ENA'
-    type(fhead1ch) :: STAT__RBM=fhead1ch(name='STAT-RBM', comment='''ENA'' or ''DIS'' at start'); ! 'ENA'
-    type(fhead1ch) :: STAT__BDR=fhead1ch(name='STAT-BDR', comment='''ENA'' or ''DIS'' at start'); ! 'DIS'
-   !type(fhead1i4) :: BITRATE0= fhead1i4(name='BITRATE0', comment='[/s] Initial telemetry bit rate');   ! 32
-    type(fhead1i4) :: SFRAMES = fhead1i4(name='SFRAMES',  comment='Number of SFs in the file'); ! 10000  ! Note: "TOTAL_SF" in the FRF file.
     ! -- Misc ------------
     type(fhead1ch) :: FRFFILE = fhead1ch(name='FRFFILE',  comment='FRF Filename'); ! 'FR880428.S0220.fits'
     type(fhead1i4) :: TOTSFFRF= fhead1i4(name='TOTSFFRF', comment='Total number of SFs in the FRF'); ! 488
@@ -1238,6 +1245,22 @@ contains
   end subroutine dump_fits_header
 
 
+  ! Calculates the asmdats and telemetry row numbers for the first ASM data in the given 16-byte row number
+  !
+  ! Basically, asm_telem_row%asmdats is similar to the telemetry rows, except the first 4 bytes (offset) in every 16 bytes are removed.
+  !
+  ! for examle, if (1,5) for irow16=1 (first in the 128-bytes frame), (13, 21) for irow16=2 (second)
+  ! (85, 117) for irow16=8 (last).
+  subroutine calc_rows_asmdats_telem(irow16, iasm, itel)
+    implicit none
+    integer, intent(in) :: irow16
+    integer, intent(out) :: iasm, itel
+
+    itel = (irow16-1)*16 + 4 + 1
+    iasm = (irow16-1)*12 + 1
+  end subroutine calc_rows_asmdats_telem
+
+
   ! Table5.5.5-6 (pp.233-234)
   function get_asmmain_row(acard) result(arret)
     implicit none
@@ -1267,8 +1290,8 @@ contains
   ! (Table5.5.5-6 (pp.233-234))
   ! For example,
   !   row=1  (Y1-FW1-CH00, W4 (Wn for n=0..127, CHnn for nn=0..15, Y1/2, FW1/2)) for TTYPE=1
-  !   row=2  (Y1-FW1-CH08, W5  for TTYPE=9
-  !   row=13 (Y1-FW1-CH01, W20 for TTYPE=2
+  !   row=2  (Y1-FW1-CH08, W5)  for TTYPE=9
+  !   row=13 (Y1-FW1-CH01, W20) for TTYPE=2
   !
   ! This routine gives the row number [1,2,13,...] for the column number [1,9,2,...].
   !

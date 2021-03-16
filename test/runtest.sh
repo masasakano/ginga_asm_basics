@@ -29,12 +29,17 @@ for com in f90test1 asmtest; do
   fi
 done
 
+### Integration test
+
+cd ../test
+echo '--- Performing integration tests...'
+exec python3 -m unittest integ_test.py
 
 ######################################################
 exit  # Temporary
 ######################################################
 
-echo "%cd .."
+echo "% cd .."
 cd ../src
 echo "PWD="`pwd`
 

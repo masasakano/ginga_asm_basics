@@ -545,6 +545,7 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     rethead = get_merged_head(tfhead, frfhead)
 
     rethead%SFRAMES%val = count(relrows%is_valid)
+    rethead%NROWSTEL%val = size(trows)
 
     rethead%TSTART%val   = UNDEF_REAL
     rethead%TEND%val     = UNDEF_REAL
@@ -586,6 +587,7 @@ if (IS_DEBUG()) print *,'DEBUG:832:loc_asm_s=',loc_asm_s
 if (IS_DEBUG()) print *,'DEBUG:833:ilocs=',ilocs
     irow = ilocs(1) ! Last valid relrow(i) before the first ASM-mode
     if (irow > 0) then
+      rethead%FRFSFN_S%val = relrows(irow)%frf%sfn
       rethead%FRFMJD_S%val = relrows(irow)%frf%mjds(1)
       rethead%EULER_S1%val = rad2deg(relrows(irow)%frf%eulers(1, 1))
       rethead%EULER_S2%val = rad2deg(relrows(irow)%frf%eulers(2, 1))
@@ -616,6 +618,7 @@ if (IS_DEBUG()) print *,'DEBUG:862:loc_asm_e=',loc_asm_e,' stfs=',size(tfs)
 if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
     irow = ilocs(1) ! First valid relrow(i) after the last ASM-mode
     if (irow > 0) then
+      rethead%FRFSFN_E%val = relrows(irow)%frf%sfn
       rethead%FRFMJD_E%val = relrows(irow)%frf%mjds(1)
       rethead%EULER_E1%val = rad2deg(relrows(irow)%frf%eulers(1, 1))
       rethead%EULER_E2%val = rad2deg(relrows(irow)%frf%eulers(2, 1))
@@ -641,6 +644,7 @@ if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
 
     ! Status values from the SF when the ASM-Mode became on
     !..................................................
+    rethead%ROW4STAT%val = relrows(loc_asm_s)%irowt
     rethead%STAT__ASM%val = trim(get_onoff_enadis(relrows(loc_asm_s)%stat_asm_b, 'asm'))
     rethead%STAT__ASA%val = trim(get_onoff_enadis(relrows(loc_asm_s)%stat_asa_b, 'asa'))
     rethead%STAT__AMC%val = trim(get_onoff_enadis(relrows(loc_asm_s)%stat_amc_b, 'amc'))
@@ -705,6 +709,7 @@ if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
     call warn_ftpcl_status(status, 'ftpkyl', trim(Subname)//':EXISTDAT')
 
     call FTPKYJ(unit, fhd%SFRAMES%name, fhd%SFRAMES%val, fhd%SFRAMES%comment, status)
+    call FTPKYJ(unit, fhd%NROWSTEL%name, fhd%NROWSTEL%val, fhd%NROWSTEL%comment, status)
     call FTPKYD(unit, fhd%TSTART%name,   fhd%TSTART%val,   14, fhd%TSTART%comment, status)
     call FTPKYD(unit, fhd%TEND%name,     fhd%TEND%val,     14, fhd%TEND%comment, status)
     call FTPKYD(unit, fhd%TSTARTMA%name, fhd%TSTARTMA%val, 14, fhd%TSTARTMA%comment, status)
@@ -712,8 +717,7 @@ if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
     call FTPKYD(unit, fhd%TSTARTMS%name, fhd%TSTARTMS%val, 14, fhd%TSTARTMS%comment, status)
     call FTPKYD(unit, fhd%TENDMS%name,   fhd%TENDMS%val,   14, fhd%TENDMS%comment, status)
 
-    call FTPKYL(unit, fhd%EXISTDAT%name, fhd%EXISTDAT%val,  6, fhd%EXISTDAT%comment, status)
-
+    call FTPKYJ(unit, fhd%ROW4STAT%name, fhd%ROW4STAT%val, fhd%ROW4STAT%comment, status)
     call FTPKYS(unit, fhd%STAT__ASM%name, fhd%STAT__ASM%val, fhd%STAT__ASM%comment, status)
     call FTPKYS(unit, fhd%STAT__ASA%name, fhd%STAT__ASA%val, fhd%STAT__ASA%comment, status)
     call FTPKYS(unit, fhd%STAT__AMC%name, fhd%STAT__AMC%val, fhd%STAT__AMC%comment, status)
@@ -722,7 +726,10 @@ if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
     call FTPKYS(unit, fhd%STAT__RBM%name, fhd%STAT__RBM%val, fhd%STAT__RBM%comment, status)
     call FTPKYS(unit, fhd%STAT__BDR%name, fhd%STAT__BDR%val, fhd%STAT__BDR%comment, status)
 
+    call FTPKYD(unit, fhd%EQUINOX%name, fhd%EQUINOX%val,   -7, fhd%EQUINOX%comment, status)
+    call FTPKYJ(unit, fhd%FRFSFN_S%name, fhd%FRFSFN_S%val, fhd%FRFSFN_S%comment, status)
     call FTPKYD(unit, fhd%FRFMJD_S%name, fhd%FRFMJD_S%val, 14, fhd%FRFMJD_S%comment, status)
+    call FTPKYJ(unit, fhd%FRFSFN_E%name, fhd%FRFSFN_E%val, fhd%FRFSFN_E%comment, status)
     call FTPKYD(unit, fhd%FRFMJD_E%name, fhd%FRFMJD_E%val, 14, fhd%FRFMJD_E%comment, status)
     call FTPKYD(unit, fhd%EULER_S1%name, fhd%EULER_S1%val, 10, fhd%EULER_S1%comment, status)
     call FTPKYD(unit, fhd%EULER_S2%name, fhd%EULER_S2%val, 10, fhd%EULER_S2%comment, status)
@@ -1245,10 +1252,9 @@ end if
     ! create the new empty FITS file blocksize=1
     !call ftinit(unit,filename,blocksize,status)
     call ftinit(unit,'!'//outfil,blocksize,status)
-    if (status .ne. 0) then
-      call FTGERR(status, errtext)
-      write(stderr,'("ERROR: Failed in ftinit() with status=", I12,": ",A)') status, trim(errtext)
-    end if
+    call warn_ftpcl_status(status, 'FTINIT', Subname)
+    if (status .ne. 0) call err_exit_with_msg('Is the output directory writable?')
+    !! Note: Without this, Segmentation Fault may occur.
 
     call FTGERR(status, errtext)  ! for Debugging
     call FTGHDN(unit, nhdu)  ! CHDU: Current HDU
@@ -1332,6 +1338,7 @@ if (IS_DEBUG()) print *,'DEBUG: test-close-status=',status,' / ',trim(errtext)
   subroutine write_asm_fits(fname, fitshead, trows, frfrows, relrows, status)
     implicit none
     character(len=*), parameter :: Extname = 'ASM table'
+    character(len=*), parameter :: Subname = 'write_asm_fits'
 
     character(len=*), intent(in) :: fname
     type(fits_header), intent(in) :: fitshead  ! Mainly for 1st-Extension header
@@ -1374,10 +1381,8 @@ if (IS_DEBUG()) print *,'DEBUG:140:aft-giou;unit=',unit, ' file=',trim(fname)
 call ftinit(unit, '!/tmp/out.fits', blocksize, status)
     !call ftinit(unit, '!'//trim(fname), blocksize, status)
 if (IS_DEBUG()) print *,'DEBUG:142:b3ftart-out, status=',status
-    if (status .ne. 0) then
-      call FTGERR(status, errtext)
-      write(stderr,'("ERROR: Failed in ftinit() with status=", I12,": ",A)') status, trim(errtext)
-    end if
+    call warn_ftpcl_status(status, 'FTINIT', Subname)
+    if (status .ne. 0) call err_exit_with_msg('Is the output directory writable?')
     call FTGHDN(unit, nhdu)  ! CHDU: Current HDU
 if (IS_DEBUG()) print *,'DEBUG:write-open1-status=',status,' / HDU=',nhdu,' / ',trim(errtext)
     call ftphpr(unit,simple,bitpix,0,naxes,0,1,extend,status)

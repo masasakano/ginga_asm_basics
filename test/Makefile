@@ -51,12 +51,12 @@ GINGA_FRFREAD_OBJ = ../../ginga_tools/v1.1/src/frfread.o ../../ginga_tools/v1.1/
 ASMTEST_OBJ = unittest.o ${SRCDIR}/fort_util.o ${SRCDIR}/err_exit.o \
         ${SRCDIR}/asm_fits_common.o ${SRCDIR}/asm_aux.o ${SRCDIR}/asm_read_telemetry.o ${SRCDIR}/asm_fitsout.o 
 
-# Required to remake ./*.mod (I think)
+## Required to remake ./*.mod (I think)
 asmtest.o: asmtest.f90 ${ASMTEST_OBJ}
-	${FC} ${FFLAGS} -I../src -c -o $@ $<
+	${FC} ${FFLAGS} -I../src -c -o $@ asmtest.f90
 
 asmtest: asmtest.o ${ASMTEST_OBJ} ${GINGA_FRFREAD_OBJ}
-	${LD} -o asmtest asmtest.o ${ASMTEST_OBJ} ${GINGA_FRFREAD_OBJ} ${LINKLIB}
+	${LD} -I../src -o asmtest asmtest.o ${ASMTEST_OBJ} ${GINGA_FRFREAD_OBJ} ${LINKLIB}
 
 %.o : %.F parameters.F
 	${FC} ${FFLAGS} -c -o $@ $<

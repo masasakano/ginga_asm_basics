@@ -272,7 +272,7 @@ end if
     integer(kind=1), dimension(:, :), allocatable, intent(in) :: headers, telems ! (word(=byte), row)
     type(asm_telem_row), dimension(size(headers, 2)) :: retrows
     
-    integer :: irow, i, j, k
+    integer :: irow, irow16, iasm, itel, i, j, k
     integer(kind=1) :: sf4, fr64
     character(len=8) :: s8
 
@@ -331,7 +331,7 @@ end if
       ! the index of asmdats() starts from 1.
       !
       ! asmdats(1)  : W4
-      ! asmdats(2)  : W4
+      ! asmdats(2)  : W5
       ! ...
       ! asmdats(12) : W15
       ! asmdats(13) : W20
@@ -341,11 +341,14 @@ end if
       ! asmdats(25) : W36
       ! ...
       ! asmdats(96) : W127
-      do j=0, 7
-        i = j*8+1
-        k = j*12+1
-        ! if ((i+11 > size(retrows(irow)%asmdats)) .and. (i+15 > size(telems, 1))) call err_exit_play_safe()  ! Testing at the first time.
-        retrows(irow)%asmdats(k:k+11) = unsigned1_to_int4(telems(i+4:i+15,irow))
+      do irow16=1, 8
+        call calc_rows_asmdats_telem(irow16, iasm, itel)
+        retrows(irow)%asmdats(iasm:iasm+11) = unsigned1_to_int4(telems(itel:itel+11,irow))
+      !do j=0, 7
+      !  i = j*8+1
+      !  k = j*12+1
+      !  ! if ((i+11 > size(retrows(irow)%asmdats)) .and. (i+15 > size(telems, 1))) call err_exit_play_safe()  ! Testing at the first time.
+      !  retrows(irow)%asmdats(k:k+11) = unsigned1_to_int4(telems(i+4:i+15,irow))
       end do
     end do
   end function get_telem_raws2types

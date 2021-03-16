@@ -40,6 +40,11 @@ To run tests,
 
 `Makefile` has some problems, and sometimes alterations in some library files may not be reflected immediately in testing (and an error is raised). If that happens, `touch` the test source file and rerun `make test`.
 
+## Troubleshooting ##
+
+* If `make` does not work well due to some linking problems, try `make clean` first.
+* `make test` does not test file existence. Make sure the sample files exist in the `samples` directory.
+
 ## Miscellaneous ##
 
 You may set the environmental variable `GINGA_DEBUG` for testing.  Some diagnostic messages are printed when you run the programs.

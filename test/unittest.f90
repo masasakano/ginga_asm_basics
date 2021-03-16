@@ -182,13 +182,23 @@ contains
     integer, dimension(:), intent(in) :: exq, act
     character(len=*), intent(in) :: subname
     character(len=*), intent(in), optional :: optmsg
-    character(len=1024) :: msg
+    character(len=1024) :: msg, sexq, sact
+    integer :: i
 
     succeed = .true.
     if (all(exq == act)) return
 
     succeed = .false.
-    write(msg, prefix_fmt_test_fail//'i6, " != ", i6)') trim(subname), exq, act
+    sexq = '['
+    sact = '['
+    do i=1, size(exq)  ! size must be larger than 0 b/c they are unequal.
+      sexq = trim(sexq) // trim(ladjusted_int(exq(i))) // ', '
+      sact = trim(sact) // trim(ladjusted_int(act(i))) // ', '
+    end do
+    sexq(len_trim(sexq):) = ']'
+    sact(len_trim(sact):) = ']'
+    print *,'DEBUG:998: sexq=',trim(sexq), trim(sact)
+    write(msg, prefix_fmt_test_fail//'A, " != ", A)') trim(subname), trim(sexq), trim(sact)
     call write_msg_optmsg(msg, optmsg)
   end function assert_equalja
 
@@ -197,14 +207,26 @@ contains
     integer(kind=1), dimension(:), intent(in) :: exq, act
     character(len=*), intent(in) :: subname
     character(len=*), intent(in), optional :: optmsg
-    character(len=1024) :: msg
+    character(len=1024) :: msg, sexq, sact
+    integer :: i
 
     succeed = .true.
     if (all(exq == act)) return
 
     succeed = .false.
-    write(msg, prefix_fmt_test_fail//'i6, " != ", i6)') trim(subname), exq, act
+    sexq = '['
+    sact = '['
+    do i=1, size(exq)  ! size must be larger than 0 b/c they are unequal.
+      sexq = trim(sexq) // trim(ladjusted_int(int(exq(i),kind=4))) // ', '
+      sact = trim(sact) // trim(ladjusted_int(int(act(i),kind=4))) // ', '
+    end do
+    sexq(len_trim(sexq):) = ']'
+    sact(len_trim(sact):) = ']'
+    print *,'DEBUG:998: sexq=',trim(sexq), trim(sact)
+    write(msg, prefix_fmt_test_fail//'A, " != ", A)') trim(subname), trim(sexq), trim(sact)
     call write_msg_optmsg(msg, optmsg)
+    !write(msg, prefix_fmt_test_fail//'i6, " != ", i6)') trim(subname), exq, act
+    !call write_msg_optmsg(msg, optmsg)
   end function assert_equalba
 
   ! Compare exqected Int_4 arrays with actual Int_1 and returns True/False

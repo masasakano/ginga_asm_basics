@@ -5,8 +5,7 @@ module test_common
   implicit none
   integer, parameter, public :: dp = kind(1.d0)  ! Common in the test routines.
 
-  !character(len=*), parameter :: SAMPLE_DIR = '../../../../ginga_samples'
-  character(len=*), parameter :: SAMPLE_DIR = '../../ginga_samples'
+  character(len=*), parameter :: SAMPLE_DIR = '../samples'
   character(len=*), parameter :: DEF_FNAME_TELEMETRY = SAMPLE_DIR//'/ginga_sirius_R199006190617.fits'
   character(len=*), parameter :: DEF_FNAME_TELEMETRY2= SAMPLE_DIR//'/ginga_sirius_P198804280220.fits'
   character(len=*), parameter :: DEF_FNAME_FRF       = SAMPLE_DIR//'/FR880428.S0220.fits'
@@ -251,6 +250,73 @@ contains
     call print_teststats(subname, TOT_NTESTS)
     if (allocated(colheads2)) deallocate(colheads2)
   end function run_test_get_colheads
+
+  ! run tests of misc in fits_common
+  !
+  ! Returns 1 if error is raised (0 otherwise)
+  integer function run_get_asmdats_row4col() result(ret_status)
+    character(*), parameter :: subname = 'run_get_asmdats_row4col'
+    integer,      parameter :: TOT_NTESTS = 6
+
+    !integer, dimension(TOT_NTESTS, 2), parameter :: col_exps = [ [1, 1], [96, 96], [2, 13], [3, 25], [9, 2], [44,42] ]
+    integer, dimension(TOT_NTESTS, 2) :: col_exps
+
+    logical :: res
+    integer :: status=-999
+    integer :: j, k
+
+    ret_status = 0  ! normal ends (n.b., returned value)
+    col_exps(1,:) = [1, 1]
+    col_exps(2,:) = [96, 96]
+    col_exps(3,:) = [2, 13] 
+    col_exps(4,:) = [3, 25] 
+    col_exps(5,:) = [9, 2] 
+    col_exps(6,:) = [44, 42]
+
+    do j=1, TOT_NTESTS
+      res = assert_equal(col_exps(j,2), get_asmdats_row4col(col_exps(j,1)) &
+         , trim(subname), 'Test-No'//trim(ladjusted_int(j))//' when given '//trim(ladjusted_int(col_exps(j,1))))
+      if (res) cycle
+
+      ! Failed
+      call print_teststats(subname, nsuccess=j-1, ifailed=j)
+      ret_status = 1
+      return
+    end do
+    call print_teststats(subname, TOT_NTESTS)
+  end function run_get_asmdats_row4col
+
+  ! run tests of misc in fits_common
+  !
+  ! Returns 1 if error is raised (0 otherwise)
+  integer function run_calc_rows_asmdats_telem() result(ret_status)
+    character(*), parameter :: subname = 'run_calc_rows_asmdats_telem'
+    integer,      parameter :: TOT_NTESTS = 3
+
+    integer, dimension(TOT_NTESTS, 3) :: col_exps
+
+    logical :: res
+    integer :: status=-999
+    integer :: j, iasm, itel
+
+    ret_status = 0  ! normal ends (n.b., returned value)
+    col_exps(1,:) = [1, 1, 5]
+    col_exps(2,:) = [2, 13, 21]
+    col_exps(3,:) = [8, 85, 117] 
+
+    do j=1, TOT_NTESTS
+      call calc_rows_asmdats_telem(col_exps(j,1), iasm, itel)
+      res = assert_equal(col_exps(j,2:3), [iasm, itel] &
+         , trim(subname), 'Test-No'//trim(ladjusted_int(j))//' when given '//trim(ladjusted_int(col_exps(j,1))))
+      if (res) cycle
+
+      ! Failed
+      call print_teststats(subname, nsuccess=j-1, ifailed=j)
+      ret_status = 1
+      return
+    end do
+    call print_teststats(subname, TOT_NTESTS)
+  end function run_calc_rows_asmdats_telem
 
   ! run tests of misc in fits_common
   !
@@ -792,6 +858,9 @@ if (.true.) then
   status = status + run_test_get_asm_sfrow()
   status = status + run_test_common_misc() 
   status = status + run_test_get_colheads() 
+  status = status + run_get_asmdats_row4col()
+  status = status + run_calc_rows_asmdats_telem()
+
 else
 print *, 'DEBUG997: after run_test_get_telem_raws2types()'  ! Without this, SEGfault...
   status = status + run_add_mjd2telem()
