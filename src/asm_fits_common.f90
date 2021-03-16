@@ -31,6 +31,8 @@ module asm_fits_common
      & the ASM-Mode is on.  Therefore, no meaningful Euler angles appear in the Table&
      & and those in the header are only the best guesses taken from a frame (if&
      & there was any) shortly before and after the period in which the ASM-Mode was on.'
+  character(len=*), parameter :: OUTFTCOMMENT2 = 'See GETOAT() in the Ginga FRFREAD reference manual&
+     & for the definitions of some of the header keyword parameters.'
 
   character(len=max_fits_char), dimension(n_all_fields) :: &
      tmtypes, tmcomms, tmforms, tmunits
@@ -257,17 +259,17 @@ module asm_fits_common
   ! NOTE: A byte must have been converted into Integer*4 with a proper filter
   type asm_frfrow
     !------- with SFCHCK() -----------
-    integer(kind=ip4), dimension(0:63) :: sync = -998;    ! (0:63), 0=OK, 1=NG
-    integer(kind=ip4) :: lostf = -998;   ! Number of frames with SYNG=NG
-    integer(kind=ip4) :: sfn = -998;     ! SF Number (by SIRIUS)
-    integer(kind=ip4) :: bitrate = -998; ! 0: high, 1: medium, 2: low
+    integer(kind=ip4), dimension(0:63) :: sync = UNDEF_INT;    ! (0:63), 0=OK, 1=NG
+    integer(kind=ip4) :: lostf = UNDEF_INT;   ! Number of frames with SYNG=NG
+    integer(kind=ip4) :: sfn = UNDEF_INT;     ! SF Number (by SIRIUS)
+    integer(kind=ip4) :: bitrate = UNDEF_INT; ! 0: high, 1: medium, 2: low
       ! NOTE: bit-rate-low(0) or high(1) in Byte12 of Telemetry-Header-16-bits.
       ! NOTE: Name is "bitrate" (with trailing 'e') as opposed to 'BITRAT' in FRFREAD manual.
       ! NOTE: 128(L)/32(M)/4(H) sec/SF (cf. Table 4.1.2, pp.187 in Ginga specification)
       !     :   2(L)/0.5(M)/0.0625(H) sec/Frame
-    integer(kind=ip4) :: relstr = -998;  ! 0: real-data, 1: stored data
+    integer(kind=ip4) :: relstr = UNDEF_INT;  ! 0: real-data, 1: stored data
       ! NOTE: The flag is different in Byte11 of Telemetry-Header-16-bits: (real(1) or stored(2))
-    integer(kind=ip4), dimension(7) :: stime = -998; ! Start time of SF in (Y,M,D,h,m,s,ms) in INTEGER
+    integer(kind=ip4), dimension(7) :: stime = UNDEF_INT; ! Start time of SF in (Y,M,D,h,m,s,ms) in INTEGER
 
     !------- with GETOAT() -----------
     ! NOTE: All but nsampl has an array of 1..4; it contains up to 4 data
@@ -288,25 +290,25 @@ module asm_fits_common
     !   of the bitrate and all the frames in a SF in the output FITS will have
     !   a common value with regard to any of the OAT.
     !
-    real(dp8), dimension(4) :: mjds = -998 ! MJD OF THE ORBIT AND ATTITUDE
-    real(dp8), dimension(17,4) :: rbuffs = -998 ! RBUFF(J,*)  *=1,NSAMPL ! for backup/debugging
+    real(dp8), dimension(4) :: mjds = UNDEF_REAL ! MJD OF THE ORBIT AND ATTITUDE
+    real(dp8), dimension(17,4) :: rbuffs = UNDEF_REAL ! RBUFF(J,*)  *=1,NSAMPL ! for backup/debugging
     !---- From here, Contents of RBUFF([1-17],*)
-    real(dp8), dimension(3, 4) :: eulers = -998        ! [J=1-3] EURLER ANGLES  (Z-Y-Z) [radian]
-    real(dp8), dimension(3, 4) :: d_eulers = -998      ! [J=4-6] DOT EURLER ANGLES [radian]
-    real(dp8), dimension(4) :: height = -998     ! [J=7] HEIGHT [km]
-    real(dp8), dimension(2, 4) :: lon_lat = -998       ! [J=8-9] LONGITUDE, LATTITUDE [deg]
-    real(dp8), dimension(4) :: dist_earth = -998 ! [J=10] DISTANCE FROM THE EARTH CENTER [km]
-    real(dp8), dimension(2, 4) :: coords_earth = -998  ! [J=11-12] ALPHA,DELTA OF THE EARTH CENTER (1950 EQUINOX) [deg]
-    real(dp8), dimension(4) :: cor = -998        ! [J=13] CUT OFF RIGIDITY [GeV/c]
-    real(dp8), dimension(2, 4) :: coords_magnet = -998 ! [J=14-15] ALPHA,DELTA OF THE MAGNETIC FIELD [deg]
-    real(dp8), dimension(2, 4) :: coords_sun = -998    ! [J=16-17] ALPHA,DELTA OF THE SUN [deg]
+    real(dp8), dimension(3, 4) :: eulers = UNDEF_REAL        ! [J=1-3] EURLER ANGLES  (Z-Y-Z) [radian]
+    real(dp8), dimension(3, 4) :: d_eulers = UNDEF_REAL      ! [J=4-6] DOT EURLER ANGLES [radian]
+    real(dp8), dimension(4) :: height = UNDEF_REAL     ! [J=7] HEIGHT [km]
+    real(dp8), dimension(2, 4) :: lon_lat = UNDEF_REAL       ! [J=8-9] LONGITUDE, LATTITUDE [deg]
+    real(dp8), dimension(4) :: dist_earth = UNDEF_REAL ! [J=10] DISTANCE FROM THE EARTH CENTER [km]
+    real(dp8), dimension(2, 4) :: coords_earth = UNDEF_REAL  ! [J=11-12] ALPHA,DELTA OF THE EARTH CENTER (1950 EQUINOX) [deg]
+    real(dp8), dimension(4) :: cor = UNDEF_REAL        ! [J=13] CUT OFF RIGIDITY [GeV/c]
+    real(dp8), dimension(2, 4) :: coords_magnet = UNDEF_REAL ! [J=14-15] ALPHA,DELTA OF THE MAGNETIC FIELD [deg]
+    real(dp8), dimension(2, 4) :: coords_sun = UNDEF_REAL    ! [J=16-17] ALPHA,DELTA OF THE SUN [deg]
     !---- Up To here, Contents of RBUFF 
-    real(dp8), dimension(4) :: sunps = -998  ! PRESENCE OF SUNSHINE, 1/0=YES/NO
-    real(dp8), dimension(4) :: elvys = -998  ! ELEVATION OF YAXIS FROM THE EARTH EDGE [deg]
-    real(dp8), dimension(4) :: eflags = -998 ! CONDITION OF THE EARTH OCCULTATION
+    real(dp8), dimension(4) :: sunps = UNDEF_INT  ! PRESENCE OF SUNSHINE, 1/0=YES/NO
+    real(dp8), dimension(4) :: elvys = UNDEF_REAL  ! ELEVATION OF YAXIS FROM THE EARTH EDGE [deg]
+    real(dp8), dimension(4) :: eflags = UNDEF_INT ! CONDITION OF THE EARTH OCCULTATION
                    ! 0: NOT OCCULTED, 1: OCCULTED BY THE DARK EARTH
                    ! 2: OCCULTED BY SUN SHONE EARTH
-    real(dp8) :: nsampl = -998 ! NUMBER OF THE ORBIT AND ATTITUDE DATA
+    real(dp8) :: nsampl = UNDEF_INT ! NUMBER OF THE ORBIT AND ATTITUDE DATA
                        ! NSAMPL=1 FOR BITRATE H,M ,  =4 FOR BITRATE L
   end type asm_frfrow
 
@@ -551,12 +553,49 @@ module asm_fits_common
     type(fhead1i4) :: SSTARTMS= fhead1i4(name='SSTARTMS', comment='Start SF of Slew360 Mode'); ! 12345
     type(fhead1i4) :: SENDMS  = fhead1i4(name='SENDMS'  , comment='End SF of Slew360 Mode');   ! 66666
     type(fhead1tf) :: EXISTDAT= fhead1tf(val=.true., name='EXISTDAT', comment='True if the file contains data'); ! T
-    type(fhead1r8) :: EULER_S1= fhead1r8(name='EULER_S1', comment='[deg] Euler 1 at the start'); ! -7.12345678E-2
-    type(fhead1r8) :: EULER_S2= fhead1r8(name='EULER_S2', comment='[deg] Euler 2 at the start'); ! -7.12345678E-2
-    type(fhead1r8) :: EULER_S3= fhead1r8(name='EULER_S3', comment='[deg] Euler 3 at the start'); ! -7.12345678E-2
-    type(fhead1r8) :: EULER_E1= fhead1r8(name='EULER_E1', comment='[deg] Euler 1 at the end'); ! -7.12345678E-2
-    type(fhead1r8) :: EULER_E2= fhead1r8(name='EULER_E2', comment='[deg] Euler 2 at the end'); ! -7.12345678E-2
-    type(fhead1r8) :: EULER_E3= fhead1r8(name='EULER_E3', comment='[deg] Euler 3 at the end'); ! -7.12345678E-2
+    type(fhead1r8) :: EQUINOX = fhead1r8(val=1950.0d0, name='EQUINOX', comment='Equinox of any coordinates'); ! 1950.0
+    type(fhead1r8) :: FRFMJD_S= fhead1r8(name='FRFMJD_S', comment='[day] Central SF time for Euler_S'); ! -7.12345678E-2
+    type(fhead1r8) :: FRFMJD_E= fhead1r8(name='FRFMJD_E', comment='[day] Central SF time for Euler_E'); ! -7.12345678E-2
+    type(fhead1r8) :: EULER_S1= fhead1r8(name='EULER_S1', comment='[deg] Euler 1 before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: EULER_S2= fhead1r8(name='EULER_S2', comment='[deg] Euler 2 before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: EULER_S3= fhead1r8(name='EULER_S3', comment='[deg] Euler 3 before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: EULER_E1= fhead1r8(name='EULER_E1', comment='[deg] Euler 1 after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: EULER_E2= fhead1r8(name='EULER_E2', comment='[deg] Euler 2 after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: EULER_E3= fhead1r8(name='EULER_E3', comment='[deg] Euler 3 after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: D_EUL_S1= fhead1r8(name='D_EUL_S1', comment='[deg] D_Euler 1 before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: D_EUL_S2= fhead1r8(name='D_EUL_S2', comment='[deg] D_Euler 2 before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: D_EUL_S3= fhead1r8(name='D_EUL_S3', comment='[deg] D_Euler 3 before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: D_EUL_E1= fhead1r8(name='D_EUL_E1', comment='[deg] D_Euler 1 after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: D_EUL_E2= fhead1r8(name='D_EUL_E2', comment='[deg] D_Euler 2 after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: D_EUL_E3= fhead1r8(name='D_EUL_E3', comment='[deg] D_Euler 3 after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: ALTIT_S = fhead1r8(name='ALTIT_S', comment='[km] Altitude before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: ALTIT_E = fhead1r8(name='ALTIT_E', comment='[km] Altitude after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: LONLATS1= fhead1r8(name='LONLATS1', comment='[deg] Longitude before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: LONLATS2= fhead1r8(name='LONLATS2', comment='[deg] Latitude before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: LONLATE1= fhead1r8(name='LONLATE1', comment='[deg] Longitude after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: LONLATE2= fhead1r8(name='LONLATE2', comment='[deg] Latitude after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: DIST_E_S= fhead1r8(name='DIST_E_S', comment='[km] Distance-Earth before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: DIST_E_E= fhead1r8(name='DIST_E_E', comment='[km] Distance-Earth after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: CO_ET_S1= fhead1r8(name='CO_ET_S1', comment='[deg] Alpha Earth center before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: CO_ET_S2= fhead1r8(name='CO_ET_S2', comment='[deg] Delta Earth center before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: CO_ET_E1= fhead1r8(name='CO_ET_E1', comment='[deg] Alpha Earth center after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: CO_ET_E2= fhead1r8(name='CO_ET_E2', comment='[deg] Delta Earth center after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: COR_S   = fhead1r8(name='COR_S', comment='[GeV/c] Cutoff Rigidity before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: COR_E   = fhead1r8(name='COR_E', comment='[GeV/c] Cutoff Rigidity after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: CO_EM_S1= fhead1r8(name='CO_EM_S1', comment='[deg] Alpha Earth B-field before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: CO_EM_S2= fhead1r8(name='CO_EM_S2', comment='[deg] Delta Earth B-field before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: CO_EM_E1= fhead1r8(name='CO_EM_E1', comment='[deg] Alpha Earth B-field after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: CO_EM_E2= fhead1r8(name='CO_EM_E2', comment='[deg] Delta Earth B-field after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: CO_SN_S1= fhead1r8(name='CO_SN_S1', comment='[deg] Alpha Sun before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: CO_SN_S2= fhead1r8(name='CO_SN_S2', comment='[deg] Delta Sun before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: CO_SN_E1= fhead1r8(name='CO_SN_E1', comment='[deg] Alpha Sun after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: CO_SN_E2= fhead1r8(name='CO_SN_E2', comment='[deg] Delta Sun after ASM Mode'); ! -7.12345678E-2
+    type(fhead1i4) :: SUNPS_S = fhead1i4(name='SUNPS_S', comment='NSAS sees the sun before ASM Mode'); ! -7.12345678E-2
+    type(fhead1i4) :: SUNPS_E = fhead1i4(name='SUNPS_E', comment='NSAS sees the sun after ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: ELVYS_S = fhead1r8(name='ELVYS_S', comment='[deg] Elevation in Y-axis before ASM Mode'); ! -7.12345678E-2
+    type(fhead1r8) :: ELVYS_E = fhead1r8(name='ELVYS_E', comment='[deg] Elevation in Y-axis after ASM Mode'); ! -7.12345678E-2
+    type(fhead1i4) :: EFLAGS_S= fhead1i4(name='EFLAGS_S', comment='EFLAGS(0-2) before ASM Mode'); ! -7.12345678E-2
+    type(fhead1i4) :: EFLAGS_E= fhead1i4(name='EFLAGS_E', comment='EFLAGS(0-2) after ASM Mode'); ! -7.12345678E-2
     type(fhead1i4) :: MODE__OBS=fhead1i4(name='MODE-OBS', comment='F8N+4 W66');
     type(fhead1i4) :: STAT__OBS=fhead1i4(name='STAT-OBS', comment='F32N+15 W65');
     type(fhead1i4) :: DPID__OBS=fhead1i4(name='DPID-OBS', comment='F15N+16 W66');
@@ -564,13 +603,13 @@ module asm_fits_common
     type(fhead1i4) :: MODE__B4 =fhead1i4(name='MODE-B4' , comment='1/0 for ASM-Time/PHA modes');  !   1
     type(fhead1i4) :: MODE__F56=fhead1i4(name='MODE-F56', comment='1/0 for ASM-Time/PHA modes in F56/W66 Bit 4'); ! 1
                                   ! COMMENT If negative, the frame does not exist. => the frame is discarded
-    type(fhead1ch) :: STAT__ASM=fhead1ch(name='STAT-ASM', comment='''ON'' or ''OFF''');  ! 'ON' 
-    type(fhead1ch) :: STAT__ASA=fhead1ch(name='STAT-ASA', comment='''ON'' or ''OFF'' for ASMA'); ! 'ON'
-    type(fhead1ch) :: STAT__AMC=fhead1ch(name='STAT-AMC', comment='''ON'' or ''OFF''');  ! 'OFF'
-    type(fhead1ch) :: STAT__HV1=fhead1ch(name='STAT-HV1', comment='''ENA'' or ''DIS'''); ! 'ENA'
-    type(fhead1ch) :: STAT__HV2=fhead1ch(name='STAT-HV2', comment='''ENA'' or ''DIS'''); ! 'ENA'
-    type(fhead1ch) :: STAT__RBM=fhead1ch(name='STAT-RBM', comment='''ENA'' or ''DIS'''); ! 'ENA'
-    type(fhead1ch) :: STAT__BDR=fhead1ch(name='STAT-BDR', comment='''ENA'' or ''DIS'''); ! 'DIS'
+    type(fhead1ch) :: STAT__ASM=fhead1ch(name='STAT-ASM', comment='''ON'' or ''OFF'' at start');  ! 'ON' 
+    type(fhead1ch) :: STAT__ASA=fhead1ch(name='STAT-ASA', comment='''ON'' or ''OFF'' for ASMA at start'); ! 'ON'
+    type(fhead1ch) :: STAT__AMC=fhead1ch(name='STAT-AMC', comment='''ON'' or ''OFF'' at start');  ! 'OFF'
+    type(fhead1ch) :: STAT__HV1=fhead1ch(name='STAT-HV1', comment='''ENA'' or ''DIS'' at start'); ! 'ENA'
+    type(fhead1ch) :: STAT__HV2=fhead1ch(name='STAT-HV2', comment='''ENA'' or ''DIS'' at start'); ! 'ENA'
+    type(fhead1ch) :: STAT__RBM=fhead1ch(name='STAT-RBM', comment='''ENA'' or ''DIS'' at start'); ! 'ENA'
+    type(fhead1ch) :: STAT__BDR=fhead1ch(name='STAT-BDR', comment='''ENA'' or ''DIS'' at start'); ! 'DIS'
    !type(fhead1i4) :: BITRATE0= fhead1i4(name='BITRATE0', comment='[/s] Initial telemetry bit rate');   ! 32
     type(fhead1i4) :: SFRAMES = fhead1i4(name='SFRAMES',  comment='Number of SFs in the file'); ! 10000  ! Note: "TOTAL_SF" in the FRF file.
     ! -- Misc ------------
@@ -1658,7 +1697,7 @@ if (ittype > nsiz) call err_exit_play_safe()
       call EXIT(1)  ! for gfortran, Lahey Fujitsu Fortran 95, etc
     end select
 
-    retstr = get_onoff_enadis(ival, is_onoff=.false.)
+    retstr = get_onoff_enadis(ival, is_onoff=is_onoff)
   end function get_onoff_enadis_from_key
 
   ! Returns 'ON|OFF' or 'ENA|DIS' if ival==(1|0) (len=3).

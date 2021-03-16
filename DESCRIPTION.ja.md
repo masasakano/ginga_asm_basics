@@ -8,6 +8,8 @@
 * `asmmkevt` : 本プログラム。ASM-mode がONの時のデータのみ抽出。
 * `asmtelemetryout` : 副プログラム。Telemetry FITSにある全データ時間領域について、ただし、指定したパラメーターのテーブルのみ出力(パラメーターを全く与えなければ、`asmmkevt` と同様に全パラメーターが出力される)。
 
+いずれも `-h` オプションだけ与えると、ヘルプメッセージが表示される。
+
 ## GingaのTelemetryデータ構造 ##
 
 1. 一つのTelemetry FITSあるいは、FRF FITSは、複数の SF を含む。SFは、歴史的理由で(日本語)「サブフレーム」と呼称されるが、事実上の意味は super-frame。1SFがGingaのデータの主要単位。
@@ -34,10 +36,11 @@ GingaのTelemetry FITSでは、各frameにそれぞれ16-byte frame-headerを先
 * Byte04=second
 * Byte05+06=millisecond
   *  `millisec = Byte05 * 256 + Byte06` (`readfits_SF_WD.c` による)
-* Byte07=Counter_A1
-* Byte08=Counter_A2
-* Byte09=Counter_B1
-* Byte10=Counter_B2
+* Byte07=Counter_A1  (TI counter)
+* Byte08=Counter_A2  (SF+Frame番号情報)
+* Byte09=Counter_B1  (TI counter)
+* Byte10=Counter_B2  (TI counter)
+  * TIの値はおそらく `Byte07*65536 + Byte09*256 + Byte10`
 * Byte11=real(1) or stored(2)
 * Byte12=bit-rate-low(0) or high(1)
 * Byte13, 14, 15: not used
@@ -54,7 +57,7 @@ stored の場合は、
 
 すなわち、大雑把に言って、(通信の遅れなどを無視すれば)フレーム開始時刻ということになる。
 
-なお、その「年」については、Telemetry FITSのFITS Headerに観測日の記載があるので、それを信用する(Telemetry filesのファイル名に現れる数字の最初の4桁の、FRFのファイル名の最初の2桁、も観測年と一致するはずである---年末年始を跨ぐ観測についてどうなるかは知らないが)。なお、念のため、本パッケージのプログラムでは、年末年始を跨いだ観測(Gingaの寿命中、数回あると思われる)についても考慮し、正しく年を推定している。
+なお、その「年」については、Telemetry FITSのFITS Headerに観測日(DATE-OBS)の記載があるので、それを信用する(Telemetry filesのファイル名に現れる数字の最初の4桁の、FRFのファイル名の最初の2桁、も観測年と一致するはずである---年末年始を跨ぐ観測についてどうなるかは知らないが)。なお、念のため、本パッケージのプログラムでは、年末年始を跨いだ観測(Gingaの寿命中、数回あると思われる)についても考慮し、正しく年を推定している。
 
 ### Frameのメインデータ (128 bytes (=ワード)) ###
 
@@ -67,6 +70,17 @@ ASM-modeの時のメインデータの構造は、以下に定義されている
 * PHA Mode : Table 5.5.5, pp.233
 * Time Modeta: Table 5.5.6, pp.234
 
+-----------
+
+仕様補足
+====
+
+* Telemetry dataでASM-ModeがONの時、FRFの該当framesは欠落している。したがって、ASM-Mode中の較正済の正確な姿勢情報を得ることができない。
+* 次善の策として、ASM-Modeに入る直前と入った直後のできるだけ近い時刻のEuler角などの姿勢情報をFITS Headerに記載する。
+* もし該当するデータが存在しない場合(例: ASM-Modeのまま、Telemetry FITSが終了した場合のASM-Mode直後の姿勢)、そのデータには、-360よりも小さい値を入れる(具体的には -1024.0)。
+* なお、一般的に本パッケージでは、浮動小数点データの初期値として -1024.0, 整数データの初期値として -999 をセットしている。そのデータを評価しようとした結果として評価不能の場合は、整数データには、原則として -1 をセットする。たとえば、FRFが無い時は、`sunps`の値は -1 である。本パッケージは、すべてのデータを評価しようと試みるはずなので、出力ファイルのヘッダーには、値 -999 は存在しないはずである。
+
+-----------
 
 Coding style
 ======
@@ -113,6 +127,8 @@ Parameters
 * `type type fits_header`: FITS header を表す
   * (読み込んだTelemetry/FRF FITSに存在せず)新規に出力するパラメーターに関しては、デフォルトとのコメントもここで定義する。
 
+これらの変数の内容を表示するための subroutine `dump_type()` が用意されている(`INTERFACE` を使ってtype非依存にしている)。
+
 アルゴリズム
 ======
 
@@ -138,6 +154,26 @@ Parameters
    * `asm_aux.f90`: Auxiliary functions/subroutines specific in this package (NOT Fortran-generic utility).
    * `err_exit.f90`: Error handling routines.
    * `fort_util.f90`: General Fortran90 utility routines.
+
+その他
+===
+
+## Frame番号とSF番号 ##
+
+Telemetry FITSの各Frameでは、frame-header (16-bytes) の Byte08 (`Counter_A2`)および frame-main-data (128-bytes)のW3(`FI` (Frame-Information?) と呼ばれる)は、SF番号とFrame番号との情報を含む(両者は完全に一致するはず)。
+
+Formatは中間報告書 Table 5.1.3, pp.201。端的には上位2 bitsがSF番号(わずか0〜3だけで回転)、下位6 bitsがFrame番号である。
+
+Frame番号は、各SFにつき、0〜63まで順番に回っていく。SF番号は、0〜3で回っていく……が、たまに不連続になったりあるいは同じSF番号が異なるはずのSFで連続するケースが認められた(bitrate が変化した時らしい)。
+
+FRF においてつけられる、SF番号は、Telemetry FITSの(Frame番号から推測した)SFの通し番号と一致するように見える。たとえば、FRFの方で途中の(ある時間帯の)データに欠落があっても、その時間帯の後のデータでは、SFの通し番号がTelemetry FITSから予想される番号と一致する。がただし、FRFの方がSFsの数がずっと多いケースもあった。
+
+## FRFとのマッチング ##
+
+* (LACの)FRFでは、ASM-mode のデータ(もしくはLACモードではないデータ)のSFは欠落しているようだ。
+* FRFから `GETOAT()` で得たMJDは、第32Frame (=F31)の先頭の時刻と1μ秒程度の精度で一致する(1μ秒程度はずれることがあり、ずれは一定ではない)。
+  * すなわち、SFの開始時刻ではなく、そのSFの真ん中の時刻。
+  * Frame同士の時間間隔は Bitrate-H でも 62.5 ms (中間報告書 Table 4.1.2, pp.187)なので、1μ秒程度のずれはおそらく問題にならない。
 
 ---------
 

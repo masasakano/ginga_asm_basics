@@ -377,10 +377,17 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     ! STAT_ASM
     sfrow%stat_asm_b = get_val_frb(TELEM_LOC%STAT_ASM,  trows, sfrow) ! (int) ON/OFF for ASM F15W65B1  ! (F32n+15, W65(Status)) Table 5.1.12, pp.213
 
-    !character(len=max_fits_char) :: stat_asa = ''; ! ON/OFF for ASM-A    F15W65B2
-    !character(len=max_fits_char) :: stat_amc = ''; ! ON/OFF for ASM-AMC  F15W65B3
-    !character(len=max_fits_char) :: stat_hv1 = ''; ! ENA/DIS for ASM-HV1 F15W65B4
-    !character(len=max_fits_char) :: stat_hv2 = ''; ! ENA/DIS for ASM-HV2 F15W65B5
+    ! STAT_ASA
+    sfrow%stat_asa_b = get_val_frb(TELEM_LOC%STAT_ASA,  trows, sfrow) ! (int) ON/OFF for ASM-A F15W65B2  ! (F32n+15, W65(Status)) Table 5.1.12, pp.213
+
+    ! STAT_AMC
+    sfrow%stat_amc_b = get_val_frb(TELEM_LOC%STAT_AMC,  trows, sfrow) ! (int) ON/OFF for ASM-AMC F15W65B3  ! (F32n+15, W65(Status)) Table 5.1.12, pp.213
+
+    ! STAT_HV1
+    sfrow%stat_hv1_b = get_val_frb(TELEM_LOC%STAT_HV1,  trows, sfrow) ! (int) ENA/DIS for ASM-HV1 F15W65B4  ! (F32n+15, W65(Status)) Table 5.1.12, pp.213
+
+    ! STAT_HV2
+    sfrow%stat_hv2_b = get_val_frb(TELEM_LOC%STAT_HV2,  trows, sfrow) ! (int) ENA/DIS for ASM-HV2 F15W65B5  ! (F32n+15, W65(Status)) Table 5.1.12, pp.213
 
     ! STAT_RBM
     sfrow%stat_rbm_b = get_val_frb(TELEM_LOC%STAT_RBM,  trows, sfrow) ! (int) ENA/DIS for ASM-RBM F15W65B6
@@ -525,9 +532,14 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     type(fits_header) :: rethead
 
     integer, dimension(1) :: ilocs
-    !integer, dimension(:), allocatable :: ilocs
     real(kind=dp8) :: mjdtmp, mjd_interval
-    integer :: irowt
+    integer :: irowt, loc_asm_s, loc_asm_e  ! Location_ASM_Start/End
+    integer :: irow,  loc_frf_s, loc_frf_e  ! Location_FRF_for_asm_Start/End (immediately before/after ASM-mdoe)
+    logical, dimension(size(relrows)) :: tfs  ! for MASK for findloc()
+    integer, dimension(8) :: vals
+    !character(8)  :: date
+    !character(10) :: time
+    character(5)  :: zone
 
     ! Initialization
     rethead = get_merged_head(tfhead, frfhead)
@@ -544,22 +556,98 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     ! Whether the file contains the data.
     rethead%EXISTDAT%val = .false.  ! any(relrows%is_valid)
 
+    ! Creation date
+    call date_and_time(ZONE=zone, VALUES=vals)
+    write(rethead%DATE%val, '(I4,"-",I0.2,"-",I0.2," ",I0.2,":",I0.2,":",I0.2,".",I0.3,A)') &
+       vals(1), vals(2), vals(3), vals(5), vals(6), vals(7), vals(8), trim(zone)
+    
     ! Start/End times
     ilocs = findloc(relrows%is_valid, .true.)
-    if (ilocs(1) == 0) return  ! No valid data
+    loc_asm_s = ilocs(1)
+    if (loc_asm_s == 0) return  ! No valid data
 
     rethead%EXISTDAT%val = .true.
-    rethead%TSTART%val = sfrow2mjd(relrows(ilocs(1)), trows)  ! defined in asm_fits_common
+    rethead%TSTART%val = sfrow2mjd(relrows(loc_asm_s), trows)  ! defined in asm_fits_common
     rethead%TSTARTMA%val = rethead%TSTART%val
 
     ilocs = findloc(relrows%is_valid, .true., BACK=.true.)
-    mjdtmp = sfrow2mjd(relrows(ilocs(1)), trows)  ! The start time of the last valid Frame
-    mjd_interval = mjdtmp - sfrow2mjd(relrows(ilocs(1)-1), trows)
+    loc_asm_e = ilocs(1)
+    mjdtmp = sfrow2mjd(relrows(loc_asm_e), trows)  ! The start time of the last valid Frame
+    mjd_interval = mjdtmp - sfrow2mjd(relrows(loc_asm_e-1), trows)
     rethead%TEND%val   = mjdtmp + mjd_interval    ! The end time of the last valid Frame
     rethead%TENDMA%val = rethead%TEND%val
 
-    ! First/Last Eulers
+    ! First/Last Eulers and other values from FRF
     !..................................................
+    tfs(:) = .false.
+    tfs(1:loc_asm_s) = .true.
+if (IS_DEBUG()) print *,'DEBUG:832:loc_asm_s=',loc_asm_s
+    ilocs = findloc(relrows%with_frf, .true., MASK=tfs, BACK=.true.)
+if (IS_DEBUG()) print *,'DEBUG:833:ilocs=',ilocs
+    irow = ilocs(1) ! Last valid relrow(i) before the first ASM-mode
+    if (irow > 0) then
+      rethead%FRFMJD_S%val = relrows(irow)%frf%mjds(1)
+      rethead%EULER_S1%val = rad2deg(relrows(irow)%frf%eulers(1, 1))
+      rethead%EULER_S2%val = rad2deg(relrows(irow)%frf%eulers(2, 1))
+      rethead%EULER_S3%val = rad2deg(relrows(irow)%frf%eulers(3, 1))
+      rethead%D_EUL_S1%val = rad2deg(relrows(irow)%frf%d_eulers(1, 1))
+      rethead%D_EUL_S2%val = rad2deg(relrows(irow)%frf%d_eulers(2, 1))
+      rethead%D_EUL_S3%val = rad2deg(relrows(irow)%frf%d_eulers(3, 1))
+      rethead%ALTIT_S%val  = relrows(irow)%frf%height(1)
+      rethead%LONLATS1%val = relrows(irow)%frf%lon_lat(1, 1)
+      rethead%LONLATS2%val = relrows(irow)%frf%lon_lat(2, 1)
+      rethead%DIST_E_S%val = relrows(irow)%frf%dist_earth(1)
+      rethead%CO_ET_S1%val = relrows(irow)%frf%coords_earth(1, 1)
+      rethead%CO_ET_S2%val = relrows(irow)%frf%coords_earth(2, 1)
+      rethead%COR_S%val    = relrows(irow)%frf%cor(1)
+      rethead%CO_EM_S1%val = relrows(irow)%frf%coords_magnet(1, 1)
+      rethead%CO_EM_S2%val = relrows(irow)%frf%coords_magnet(2, 1)
+      rethead%CO_SN_S1%val = relrows(irow)%frf%coords_sun(1, 1)
+      rethead%CO_SN_S2%val = relrows(irow)%frf%coords_sun(2, 1)
+      rethead%SUNPS_S%val  = relrows(irow)%frf%sunps(1)
+      rethead%ELVYS_S%val  = relrows(irow)%frf%elvys(1)
+      rethead%EFLAGS_S%val = relrows(irow)%frf%eflags(1)
+    end if
+
+    tfs(:) = .false.
+    tfs(loc_asm_e:size(tfs)) = .true.
+if (IS_DEBUG()) print *,'DEBUG:862:loc_asm_e=',loc_asm_e,' stfs=',size(tfs)
+    ilocs = findloc(relrows%with_frf, .true., MASK=tfs)
+if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
+    irow = ilocs(1) ! First valid relrow(i) after the last ASM-mode
+    if (irow > 0) then
+      rethead%FRFMJD_E%val = relrows(irow)%frf%mjds(1)
+      rethead%EULER_E1%val = rad2deg(relrows(irow)%frf%eulers(1, 1))
+      rethead%EULER_E2%val = rad2deg(relrows(irow)%frf%eulers(2, 1))
+      rethead%EULER_E3%val = rad2deg(relrows(irow)%frf%eulers(3, 1))
+      rethead%D_EUL_E1%val = rad2deg(relrows(irow)%frf%d_eulers(1, 1))
+      rethead%D_EUL_E2%val = rad2deg(relrows(irow)%frf%d_eulers(2, 1))
+      rethead%D_EUL_E3%val = rad2deg(relrows(irow)%frf%d_eulers(3, 1))
+      rethead%ALTIT_E%val  = relrows(irow)%frf%height(1)
+      rethead%LONLATE1%val = relrows(irow)%frf%lon_lat(1, 1)
+      rethead%LONLATE2%val = relrows(irow)%frf%lon_lat(2, 1)
+      rethead%DIST_E_E%val = relrows(irow)%frf%dist_earth(1)
+      rethead%CO_ET_E1%val = relrows(irow)%frf%coords_earth(1, 1)
+      rethead%CO_ET_E2%val = relrows(irow)%frf%coords_earth(2, 1)
+      rethead%COR_E%val    = relrows(irow)%frf%cor(1)
+      rethead%CO_EM_E1%val = relrows(irow)%frf%coords_magnet(1, 1)
+      rethead%CO_EM_E2%val = relrows(irow)%frf%coords_magnet(2, 1)
+      rethead%CO_SN_E1%val = relrows(irow)%frf%coords_sun(1, 1)
+      rethead%CO_SN_E2%val = relrows(irow)%frf%coords_sun(2, 1)
+      rethead%SUNPS_E%val  = relrows(irow)%frf%sunps(1)
+      rethead%ELVYS_E%val  = relrows(irow)%frf%elvys(1)
+      rethead%EFLAGS_E%val = relrows(irow)%frf%eflags(1)
+    end if
+
+    ! Status values from the SF when the ASM-Mode became on
+    !..................................................
+    rethead%STAT__ASM%val = trim(get_onoff_enadis(relrows(loc_asm_s)%stat_asm_b, 'asm'))
+    rethead%STAT__ASA%val = trim(get_onoff_enadis(relrows(loc_asm_s)%stat_asa_b, 'asa'))
+    rethead%STAT__AMC%val = trim(get_onoff_enadis(relrows(loc_asm_s)%stat_amc_b, 'amc'))
+    rethead%STAT__HV1%val = trim(get_onoff_enadis(relrows(loc_asm_s)%stat_hv1_b, 'hv1'))
+    rethead%STAT__HV2%val = trim(get_onoff_enadis(relrows(loc_asm_s)%stat_hv2_b, 'hv2'))
+    rethead%STAT__RBM%val = trim(get_onoff_enadis(relrows(loc_asm_s)%stat_rbm_b, 'rbm'))
+    rethead%STAT__BDR%val = trim(get_onoff_enadis(relrows(loc_asm_s)%stat_bdr_b, 'bdr'))
 
     ! Start/End times of Slew360 mode
     ilocs = findloc(relrows%mode_slew, 1, MASK=relrows%is_valid)
@@ -579,14 +667,18 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
   !end function get_fitshead
 
   ! Output FITS header in a HDU of the ASM data FITS file
-  subroutine write_asm_fits_header(unit, fhd, status, primary)
+  subroutine write_asm_fits_header(unit, fhd, status, comname, args, primary)
     implicit none
     character(len=*), parameter :: Subname = 'write_asm_fits_header'
     integer, intent(in) :: unit
     type(fits_header), intent(in) :: fhd
     integer, intent(out) :: status
+    character(len=*), intent(in), optional :: comname  ! Command name
+    character(len=*), dimension(:), intent(in), optional :: args  ! command-line Arguments
     logical, intent(in), optional :: primary  ! if .true., it is for Primary header.
     logical :: is_primary
+    integer :: i
+    character(len=2048) :: strarg
 
     is_primary = .false.
     if (present(primary)) then
@@ -620,34 +712,77 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     call FTPKYD(unit, fhd%TSTARTMS%name, fhd%TSTARTMS%val, 14, fhd%TSTARTMS%comment, status)
     call FTPKYD(unit, fhd%TENDMS%name,   fhd%TENDMS%val,   14, fhd%TENDMS%comment, status)
 
+    call FTPKYL(unit, fhd%EXISTDAT%name, fhd%EXISTDAT%val,  6, fhd%EXISTDAT%comment, status)
+
+    call FTPKYS(unit, fhd%STAT__ASM%name, fhd%STAT__ASM%val, fhd%STAT__ASM%comment, status)
+    call FTPKYS(unit, fhd%STAT__ASA%name, fhd%STAT__ASA%val, fhd%STAT__ASA%comment, status)
+    call FTPKYS(unit, fhd%STAT__AMC%name, fhd%STAT__AMC%val, fhd%STAT__AMC%comment, status)
+    call FTPKYS(unit, fhd%STAT__HV1%name, fhd%STAT__HV1%val, fhd%STAT__HV1%comment, status)
+    call FTPKYS(unit, fhd%STAT__HV2%name, fhd%STAT__HV2%val, fhd%STAT__HV2%comment, status)
+    call FTPKYS(unit, fhd%STAT__RBM%name, fhd%STAT__RBM%val, fhd%STAT__RBM%comment, status)
+    call FTPKYS(unit, fhd%STAT__BDR%name, fhd%STAT__BDR%val, fhd%STAT__BDR%comment, status)
+
+    call FTPKYD(unit, fhd%FRFMJD_S%name, fhd%FRFMJD_S%val, 14, fhd%FRFMJD_S%comment, status)
+    call FTPKYD(unit, fhd%FRFMJD_E%name, fhd%FRFMJD_E%val, 14, fhd%FRFMJD_E%comment, status)
+    call FTPKYD(unit, fhd%EULER_S1%name, fhd%EULER_S1%val, 10, fhd%EULER_S1%comment, status)
+    call FTPKYD(unit, fhd%EULER_S2%name, fhd%EULER_S2%val, 10, fhd%EULER_S2%comment, status)
+    call FTPKYD(unit, fhd%EULER_S3%name, fhd%EULER_S3%val, 10, fhd%EULER_S3%comment, status)
+    call FTPKYD(unit, fhd%EULER_E1%name, fhd%EULER_E1%val, 10, fhd%EULER_E1%comment, status)
+    call FTPKYD(unit, fhd%EULER_E2%name, fhd%EULER_E2%val, 10, fhd%EULER_E2%comment, status)
+    call FTPKYD(unit, fhd%EULER_E3%name, fhd%EULER_E3%val, 10, fhd%EULER_E3%comment, status)
+    call FTPKYD(unit, fhd%D_EUL_S1%name, fhd%D_EUL_S1%val, 10, fhd%D_EUL_S1%comment, status)
+    call FTPKYD(unit, fhd%D_EUL_S2%name, fhd%D_EUL_S2%val, 10, fhd%D_EUL_S2%comment, status)
+    call FTPKYD(unit, fhd%D_EUL_S3%name, fhd%D_EUL_S3%val, 10, fhd%D_EUL_S3%comment, status)
+    call FTPKYD(unit, fhd%D_EUL_E1%name, fhd%D_EUL_E1%val, 10, fhd%D_EUL_E1%comment, status)
+    call FTPKYD(unit, fhd%D_EUL_E2%name, fhd%D_EUL_E2%val, 10, fhd%D_EUL_E2%comment, status)
+    call FTPKYD(unit, fhd%D_EUL_E3%name, fhd%D_EUL_E3%val, 10, fhd%D_EUL_E3%comment, status)
+    call FTPKYD(unit, fhd%ALTIT_S%name , fhd%ALTIT_S%val , 10, fhd%ALTIT_S%comment, status)
+    call FTPKYD(unit, fhd%ALTIT_E%name , fhd%ALTIT_E%val , 10, fhd%ALTIT_E%comment, status)
+    call FTPKYD(unit, fhd%LONLATS1%name, fhd%LONLATS1%val, 10, fhd%LONLATS1%comment, status)
+    call FTPKYD(unit, fhd%LONLATS2%name, fhd%LONLATS2%val, 10, fhd%LONLATS2%comment, status)
+    call FTPKYD(unit, fhd%LONLATE1%name, fhd%LONLATE1%val, 10, fhd%LONLATE1%comment, status)
+    call FTPKYD(unit, fhd%LONLATE2%name, fhd%LONLATE2%val, 10, fhd%LONLATE2%comment, status)
+    call FTPKYD(unit, fhd%DIST_E_S%name, fhd%DIST_E_S%val, 10, fhd%DIST_E_S%comment, status)
+    call FTPKYD(unit, fhd%DIST_E_E%name, fhd%DIST_E_E%val, 10, fhd%DIST_E_E%comment, status)
+    call FTPKYD(unit, fhd%CO_ET_S1%name, fhd%CO_ET_S1%val, 10, fhd%CO_ET_S1%comment, status)
+    call FTPKYD(unit, fhd%CO_ET_S2%name, fhd%CO_ET_S2%val, 10, fhd%CO_ET_S2%comment, status)
+    call FTPKYD(unit, fhd%CO_ET_E1%name, fhd%CO_ET_E1%val, 10, fhd%CO_ET_E1%comment, status)
+    call FTPKYD(unit, fhd%CO_ET_E2%name, fhd%CO_ET_E2%val, 10, fhd%CO_ET_E2%comment, status)
+    call FTPKYD(unit, fhd%COR_S%name,    fhd%COR_S%val,    10, fhd%COR_S%comment, status)
+    call FTPKYD(unit, fhd%COR_E%name,    fhd%COR_E%val,    10, fhd%COR_E%comment, status)
+    call FTPKYD(unit, fhd%CO_EM_S1%name, fhd%CO_EM_S1%val, 10, fhd%CO_EM_S1%comment, status)
+    call FTPKYD(unit, fhd%CO_EM_S2%name, fhd%CO_EM_S2%val, 10, fhd%CO_EM_S2%comment, status)
+    call FTPKYD(unit, fhd%CO_EM_E1%name, fhd%CO_EM_E1%val, 10, fhd%CO_EM_E1%comment, status)
+    call FTPKYD(unit, fhd%CO_EM_E2%name, fhd%CO_EM_E2%val, 10, fhd%CO_EM_E2%comment, status)
+    call FTPKYD(unit, fhd%CO_SN_S1%name, fhd%CO_SN_S1%val, 10, fhd%CO_SN_S1%comment, status)
+    call FTPKYD(unit, fhd%CO_SN_S2%name, fhd%CO_SN_S2%val, 10, fhd%CO_SN_S2%comment, status)
+    call FTPKYD(unit, fhd%CO_SN_E1%name, fhd%CO_SN_E1%val, 10, fhd%CO_SN_E1%comment, status)
+    call FTPKYD(unit, fhd%CO_SN_E2%name, fhd%CO_SN_E2%val, 10, fhd%CO_SN_E2%comment, status)
+    call FTPKYJ(unit, fhd%SUNPS_S%name , fhd%SUNPS_S%val , fhd%SUNPS_S%comment, status)
+    call FTPKYJ(unit, fhd%SUNPS_E%name , fhd%SUNPS_E%val , fhd%SUNPS_E%comment, status)
+    call FTPKYD(unit, fhd%ELVYS_S%name , fhd%ELVYS_S%val , 10, fhd%ELVYS_S%comment, status)
+    call FTPKYD(unit, fhd%ELVYS_E%name , fhd%ELVYS_E%val , 10, fhd%ELVYS_E%comment, status)
+    call FTPKYJ(unit, fhd%EFLAGS_S%name, fhd%EFLAGS_S%val, fhd%EFLAGS_S%comment, status)
+    call FTPKYJ(unit, fhd%EFLAGS_E%name, fhd%EFLAGS_E%val, fhd%EFLAGS_E%comment, status)
+    call FTPKYS(unit, fhd%DATE%name, fhd%DATE%val, fhd%DATE%comment, status)
+
     call FTPCOM(unit, OUTFTCOMMENT1, status)  ! defined in asm_fits_common
-    !call FTPHIS(unit, HISTORY1, status)  ! defined in asm_fits_common
-    
+    call FTPCOM(unit, OUTFTCOMMENT2, status)  ! defined in asm_fits_common
+
+    if (present(comname) .and. present(args)) then
+      strarg = 'Command: '//trim(comname)
+      do i=1, size(args)
+        strarg = trim(strarg) // ' ' // trim(args(i))
+      end do
+      call FTPHIS(unit, strarg, status)
+    end if
+
     !call FTPKYS(unit, 'TITLE',    fitshead%title,    asm_comm%title,    status)
     !!call FTPKY[JKLS](funit, 'date', '????', '[day] Creation date of this file', status)
     !!call FTPKY[EDFG](unit,keyword,keyval,decimals,comment, > status)  ! decimals < 0 => G format, -4 means 4 digits below 0
     ! .........
   end subroutine write_asm_fits_header
 
-  !! Output FITS table in writing the ASM data FITS file
-  !subroutine write_asm_fits_table(unit, tables, status)
-  !  implicit none
-  !  type(asm_table_spec), parameter :: tspec = asm_table_spec()
-
-  !  integer, intent(in) :: unit
-  !  type(asm_table_col), intent(in) :: tables
-  !  integer, intent(out) :: status
-
-  !  integer :: colnum
-
-  !  !FTPCL[SLBIJKEDCM](unit,colnum,frow,felem,nelements,values, > status) ! frow: 1st row?, felem: 1st element?
-  !  !! Write elements into an ASCII or binary table column. The ‘felem’ parameter applies only to vector columns in binary tables and is ignored when writing to ASCII tables.
-  !  
-  !  !colnum = tspec%i%tstart
-  !  !!call FTPCLD(unit, colnum, 1, 1, 2, dvalues, status)  ! colnum = 1
-  !  !!call ftpkys(unit, 'FILENAME', fitshead%filename, asm_comm%filename, status) ! asm_comm defined in asm_fits_common
-  !  !! .........
-  !end subroutine write_asm_fits_table
 
   ! Test output for debugging.
   subroutine write_tmp_fits(fname, status)
@@ -695,6 +830,7 @@ if (IS_DEBUG()) print *,'DEBUG:042:b3ftart-out, status=',status
     character(len=30) :: errtext ! for FITS error to receive
     character(len=1024) :: usermsg  ! for humans
     character(len=LEN_READABLE_KEY) :: ckey
+    real(dp8) :: rval
     real(dp8), dimension(:), allocatable :: cold
     integer, dimension(:), allocatable :: colj
     integer(kind=2), dimension(:), allocatable :: coli
@@ -807,7 +943,11 @@ if (IS_DEBUG()) print *,'DEBUG:234:fds=',cold(5:8)
               call EXIT(1)
             end if
             ! cold(iout:iend) = frfrows(relrows(irelrow)%irowf)%eulers(iprm,1)  ! Same value for the entire SF
-            cold(iout:iend) = relrows(irelrow)%frf%eulers(iprm,1)  ! Same value for the entire SF
+            rval = relrows(irelrow)%frf%eulers(iprm,1)
+            if (rval .ge. -360) then
+              rval = rad2deg(rval)  ! Convert radian to degree
+            end if
+            cold(iout:iend) = rval  ! Same value for the entire SF
 if (IS_DEBUG()) then ! in asm_fits_common
 if ((irelrow > 2) .and. (irelrow < 5)) then
  !print *,'DEBUG:429:iprm=',iprm,' irelrow=',irelrow,' irowf=',relrows(irelrow)%irowf,' iout=', iout, ' eulers=', &
@@ -1023,8 +1163,6 @@ if (IS_DEBUG()) call dump_type(relrows(5))
         call warn_ftpcl_status(status, 'FTPCLI', ckey)
         call modify_ttype_comment(unit, ittype, ckey, status)
 
-!      case('ASM_C1', 'ASM_C2')   
-!ittype = ittype + 1
       case default
         call err_exit_with_msg('Parameter '//trim(ckey)//' is not yet taken into account.')
       end select
@@ -1035,7 +1173,7 @@ if (IS_DEBUG()) call dump_type(relrows(5))
   end subroutine write_cols
 
   ! Output FITS file of the ASM data
-  subroutine write_asm_evt_fits(outfil, fhead, trows, relrows, status, outcolkeys)
+  subroutine write_asm_evt_fits(outfil, fhead, trows, relrows, status, comname, args, outcolkeys)
     implicit none
     integer, parameter :: MY_FUNIT = 159  ! arbitrary
     character(len=*), parameter :: Subname = 'write_asm_evt_fits'
@@ -1047,6 +1185,8 @@ if (IS_DEBUG()) call dump_type(relrows(5))
     !type(asm_frfrow), dimension(:), intent(in) :: frfrows
     type(asm_sfrow), dimension(:), intent(in) :: relrows
     integer, intent(out) :: status
+    character(len=*), intent(in) :: comname
+    character(len=*), dimension(:), intent(in) :: args
     character(len=*), dimension(:), intent(in), optional :: outcolkeys  ! e.g., ['Tstart', 'Euler', SFNum]
 
     integer :: unit, bitpix, blocksize !, naxis, hdutype, nframes, naxis1
@@ -1149,7 +1289,7 @@ call FTGHDN(unit, nhdu)
 call FTGERR(status, errtext)
 if (IS_DEBUG()) print *,'test-new-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
 
-    call write_asm_fits_header(unit, fhead, status, primary=.false.)
+    call write_asm_fits_header(unit, fhead, status, comname, args, primary=.false.)
     !fhead%EXISTDAT%val = any(relrows%is_valid)
 
     call write_cols(unit, trows, relrows, colheads, status)  !!!!!!!!!!!!!!!

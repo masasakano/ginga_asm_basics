@@ -24,10 +24,11 @@ program asmmkevt
   real(kind=dp8) ::     RBUFFS(17,4),ELVYS(4)
 
   integer :: i, j
-  character(len=1024) :: errmsg, arg, fname = '', telfil='', frffil = '', outfil = '', s
+  character(len=1024) :: errmsg, arg, telfil='', frffil = '', outfil = '', s, comname=''
   !character(len=30) :: errtext  ! for FTGERR(status, errtext)
 
   integer :: funit, status=-999 !, blocksize, hdutype, nframes, naxis1
+  logical :: torf
 
   type(fits_header) :: tfhead, outhead
   ! integer(kind=1), dimension(:, :), allocatable :: headers, telems !  (word, row)
@@ -60,20 +61,23 @@ program asmmkevt
   j =  0  ! Index only for the main arugment.
   do
     i = i+1
-    call get_command_argument(i, arg)
-    if (i == 0) cycle
+    call get_command_argument(i, arg)  ! Fortran 2003
+    if (i == 0) then  ! i=0 is for $0
+      comname = trim(arg)
+      cycle
+    end if
     if (len_trim(arg) == 0) exit
 
     if ((trim(arg) == '-h') .or. (trim(arg) == '--help')) then
       print *, 'USAGE: asmmkevt [-h] Telemetry.fits FRF.fits out.fits'
+      print *, ' NOTE: you may set environmental variable GINGA_CHATTER=4 to make it quieter.'
       call EXIT(0)
     end if
     j = j + 1
     if (j > 3) call err_exit_with_msg('The number of the main argument must be exactly 3, but given more.')
     argv(j)%val = arg
     if (i == 1) then
-      fname = arg  ! Telemetry
-      telfil= arg
+      telfil= arg  ! Telemetry
       write (*,*) 'Telemetry: '//trim(arg)
     else if (i == 2) then
       frffil = arg ! FRF
@@ -85,7 +89,13 @@ program asmmkevt
   end do
   if (j < 3) call err_exit_with_msg('The number of the main argument must be exactly 3, but given only '//trim(ladjusted_int(j)))
 
-if (IS_DEBUG()) WRITE (*,*) 'fname=' // TRIM(fname)
+!if (IS_DEBUG()) WRITE (*,*) 'fname=' // TRIM(fname)
+
+  ! FileTest
+  inquire(file=trim(telfil), exist=torf)
+  if (.not. torf) call err_exit_with_msg('File does not exist: '//trim(telfil))
+  inquire(file=trim(frffil), exist=torf)
+  if (.not. torf) call err_exit_with_msg('File does not exist: '//trim(frffil))
 
   ! Get (fill) headers, telems: raw byte Array(word(byte), row)
 !  call read_telemetry(fname, headers, telems) !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -151,7 +161,7 @@ if (IS_DEBUG()) WRITE (*,*) 'fname=' // TRIM(fname)
   !---------------- MAIN ------------------
     
   ! Get telm_rows from the default data with add_mjd2telem(tfhead, telm_rows)
-  call mk_telem_rows(fname, tfhead, trows)
+  call mk_telem_rows(telfil, tfhead, trows)
 !  call read_telemetry(trim(get_val_from_key('telemetry', argv)), tfhead, headers, telems) ! tfhead: Telemetry-Fits-HEADer
 !if (IS_DEBUG()) then ! in asm_fits_common
 !call dump_type(tfhead, 1) !! DEBUG
@@ -173,7 +183,7 @@ if (IS_DEBUG()) WRITE (*,*) 'fname=' // TRIM(fname)
   !call write_asm_evt_fits(outfil, tfhead, trows, relrows, status)
   outhead = get_asm_fits_header(tfhead, frfhead, trows, relrows, status)
   !outhead = get_merged_head(tfhead, frfhead)
-  call write_asm_evt_fits(get_val_from_key('outfile', argv), outhead, trows, relrows, status)
+  call write_asm_evt_fits(get_val_from_key('outfile', argv), outhead, trows, relrows, status, comname, argv(:)%val)
 
   call print_proc_stats(trows, relrows, frfrows)
 
