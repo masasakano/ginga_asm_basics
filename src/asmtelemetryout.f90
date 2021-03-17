@@ -12,11 +12,9 @@ program asmtelemetryout
   implicit none
 
 !integer, parameter :: dp = kind(1.d0) ! defined in asm_fits_common
-  integer :: Maxaxes, nbytepercard, nbyteforheader
-  parameter(Maxaxes = 2, nbytepercard = 144, nbyteforheader = 16 )
   character(len=*), parameter :: Subname = 'main'
 
-  integer :: i, j, n_mainarg, istart_main
+  integer :: i, j, n_mainargs, istart_main
 
   integer :: status=-999 !, hdutype, nframes, naxis1
   logical :: torf
@@ -34,7 +32,7 @@ program asmtelemetryout
   !type(t_argv), dimension(3) :: argv
   !argv = [t_argv(key='telemetry'), t_argv(key='FRF'), t_argv(key='outfile')] 
 
-  !! USAGE: ./asmtelemetryout ../../../ginga_samples/ginga_sirius_P198804280220.fits ../../../ginga_samples/FR880428.S0220.fits ../../../ginga_samples/mkevt_out_test.fits
+  !! USAGE: ./asmtelemetryout ../samples/ginga_sirius_P198804280220.fits ../samples/FR880428.S0220.fits ../../../ginga_samples/mkevt_out_test.fits
 
   !-- Handle the command-line arguments.
 
@@ -82,10 +80,14 @@ if (IS_DEBUG()) print *,'DEBUG:003: size(allargv)=',size(allargv)
     end select
   end do
 
-  n_mainarg = size(allargv) - istart_main + 1
-  if (n_mainarg < 3) call err_exit_with_msg( &
-     'The number of the main argument must be at least 3, but given only '//trim(ladjusted_int(n_mainarg)))
-if (IS_DEBUG()) print *,'DEBUG:024: istart_main=',istart_main, ' n_mainarg=',n_mainarg
+  if (istart_main == -1) then
+    n_mainargs = size(allargv)
+  else
+    n_mainargs = size(allargv) - istart_main + 1
+  end if
+  if (n_mainargs < 3) call err_exit_with_msg( &
+     'The number of the main arguments must be at least 3, but given only '//trim(ladjusted_int(n_mainargs)))
+if (IS_DEBUG()) print *,'DEBUG:024: istart_main=',istart_main, ' n_mainargs=',n_mainargs
 
   call dump_all_argv(allargv) ! DEBUG and for information
 
@@ -107,7 +109,7 @@ if (IS_DEBUG()) print *,'DEBUG:024: istart_main=',istart_main, ' n_mainarg=',n_m
   !outhead = get_merged_head(tfhead, frfhead)
   outhead = get_asm_fits_header(tfhead, frfhead, trows, relrows, status)
 
-  if (n_mainarg == 3) then
+  if (n_mainargs == 3) then
     call write_asm_evt_fits(get_val_from_key('outfile', allargv), outhead, trows, relrows, status &
        , comname, allargv(:)%val)
   else

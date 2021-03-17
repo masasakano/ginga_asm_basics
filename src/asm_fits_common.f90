@@ -8,7 +8,8 @@ module asm_fits_common
 
   integer, parameter, private :: dp  = kind(1.d0)
   integer, parameter, public ::  dp8 = 8 ! FITS file REAL8
-  integer, parameter, public ::  ip4 = 4 ! FITS file INTEGER4
+  integer, parameter, public ::  ip4 = 4 ! "J" in FITSIO; FITS file INTEGER4
+  integer, parameter, public ::  ip2 = 2 ! "I" in FITSIO
   integer, parameter :: n_all_fields = 10  ! Number of fields to read and output
   integer, parameter, public :: max_fits_char = 68
   integer, parameter, public :: MAX_LEN_FKEY  = 8  ! FITS key maximum length of characters
@@ -65,6 +66,10 @@ module asm_fits_common
   interface get_val_from_key
     module procedure get_val_from_key_argv
   end interface get_val_from_key
+
+  interface get_int_from_key
+    module procedure get_int_from_key_argv
+  end interface get_int_from_key
 
   interface dump_type
     module procedure dump_asm_telem_row, dump_asm_frfrow, dump_asm_sfrow, dump_form_unit
@@ -866,6 +871,21 @@ contains
     tmp = get_element(key, ary)
     retobj = tmp%val  ! If not found, the result is uncertain.
   end function get_val_from_key_argv
+
+  !-----------------------------------------
+  ! interface get_int_from_key
+  !   : the same as get_val_from_key_argv but returns integer.
+  !-----------------------------------------
+  
+  function get_int_from_key_argv(key, ary) result(iret)
+    character(len=*), intent(in) :: key
+    type(t_argv), dimension(:), intent(in) :: ary
+    integer :: iret
+    character(len=LEN_T_ARGV) :: s
+
+    s = get_val_from_key(trim(key), ary)
+    read(s, '(I65)') iret
+  end function get_int_from_key_argv
 
   !-----------------------------------------
   

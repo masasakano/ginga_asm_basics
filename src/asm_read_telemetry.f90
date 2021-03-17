@@ -189,6 +189,7 @@ contains
       stop  ! redundant
     end if
 
+    ! FiTs_GeT_CoLumn (Get the datatype of a column): FTGTCL(unit,colnum, > datacode,repeat,width,status)
     call FTGTCL(funit, 1, datacode, repeat, width, status)
     if ((datacode .ne. 11) .or. (repeat .ne. nbytespercard)) then  ! namely, if TFORM1 != '144B'
       errmsg = 'The format (TFORM1) is not 144B.'
@@ -344,11 +345,6 @@ end if
       do irow16=1, 8
         call calc_rows_asmdats_telem(irow16, iasm, itel)
         retrows(irow)%asmdats(iasm:iasm+11) = unsigned1_to_int4(telems(itel:itel+11,irow))
-      !do j=0, 7
-      !  i = j*8+1
-      !  k = j*12+1
-      !  ! if ((i+11 > size(retrows(irow)%asmdats)) .and. (i+15 > size(telems, 1))) call err_exit_play_safe()  ! Testing at the first time.
-      !  retrows(irow)%asmdats(k:k+11) = unsigned1_to_int4(telems(i+4:i+15,irow))
       end do
     end do
   end function get_telem_raws2types
@@ -384,7 +380,7 @@ end if
       !  write (*, '(".")', advance='no')
       !end if
 
-      ! To check whether the year has chnaged.
+      ! To check whether the year has chnaged during the observation.
       if (trows(irowt)%month < month_cur) then
         ! Month decreased (probably from 12 to 1)
         !write(stderr, *)  ! To make it easier to read in the terminal (considering the Progress bar on STDOUT)

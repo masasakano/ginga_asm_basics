@@ -48,6 +48,25 @@ contains
     deg2rad = deg * PI/180.0d0
   end function deg2rad
 
+  ! Returns a character, join-ing a Character Array with a separator.
+  !
+  function join_chars(ary, sep) result(retchar)
+    character(len=*), dimension(:), intent(in) :: ary
+    character(len=*), intent(in) :: sep
+    character(len=4096) :: retchar
+    integer :: i
+
+    retchar = ''
+    if (size(ary) == 0) return
+
+    retchar = trim(ary(1))
+    if (size(ary) == 1) return
+
+    do i=2, size(ary)
+      retchar = trim(retchar) // trim(sep) // trim(ary(i))
+    end do
+  end function join_chars
+
   ! Returns a character of left-adjusted integer (with prefix if specified)
   !
   ! if len_trim(prefix) is too long, the returned character is an error message!

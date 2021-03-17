@@ -26,7 +26,7 @@ MACOPT = LD="gfortran -g" CC="${GCC} -g" FC="gfortran -g -c -fno-second-undersco
 
 INSTALL_DIR = ../bin
 
-ALL = asmdump asmmkevt asmtelemetryout
+ALL = asmdump asmmkevt asmtelemetryout asm2qdp
 
 # ALLS = make_sf_list.pl
 
@@ -62,6 +62,9 @@ ASMDUMP_OBJ = err_exit.o fort_util.o \
 #        frfread.o getoa2.o cnven.o mjd.o srcarray.o\
 #        satpn3.o orbit.o recpol_new.o
 
+asm2qdp.o: ${ASMDUMP_OBJ} asm2qdp.f90
+	${FC} ${FFLAGS} -c -o $@ asm2qdp.f90 ${LINKLIB}
+
 asmtelemetryout.o: ${ASMDUMP_OBJ} asmtelemetryout.f90
 	${FC} ${FFLAGS} -c -o $@ asmtelemetryout.f90 ${LINKLIB}
 
@@ -70,6 +73,9 @@ asmmkevt.o: ${ASMDUMP_OBJ} asmmkevt.f90
 
 asmdump.o: ${ASMDUMP_OBJ} asmdump.f90
 	${FC} ${FFLAGS} -c -o $@ asmdump.f90 ${LINKLIB}
+
+asm2qdp: ${GINGA_FRFREAD_OBJ} ${ASMDUMP_OBJ} asm2qdp.o
+	${LD} -o asm2qdp asm2qdp.o ${GINGA_FRFREAD_OBJ} ${ASMDUMP_OBJ} ${LINKLIB}
 
 asmtelemetryout: ${GINGA_FRFREAD_OBJ} ${ASMDUMP_OBJ} asmtelemetryout.o
 	${LD} -o asmtelemetryout asmtelemetryout.o ${GINGA_FRFREAD_OBJ} ${ASMDUMP_OBJ} ${LINKLIB}

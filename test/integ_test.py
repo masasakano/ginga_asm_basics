@@ -22,7 +22,7 @@ def ftgky_frdump(sdump, key):
 
     return float(mat[1])
 
-# Get a double array of data for a specific row
+# Get a double array of data for the specified row
 def flist_data(fname, row):
     ret = subprocess.run(['flist', fname, 'STDOUT', '-', str(row), 'more=yes', 'prhead=no'], timeout=None,
                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
@@ -31,6 +31,19 @@ def flist_data(fname, row):
     lines = lines[2:]
 
     return [i.split() for i in lines] # => [['Telemetry[17], '=', '250'], [...], ...]
+
+# Get an array of data for the specified row from the QDP output
+# assuming the first 2 rows are comment lines
+def qdp_data(fname, row):
+    with open(fname, 'r') as f:  # b for Binary mode
+        iline = 0
+        for line in f:
+            if (re.search(r'^ *(@|!)', line)): continue
+            iline += 1
+            if (iline == row):
+                print('DEBUG:sub',line) # DEBUG
+                return line.split()
+
 
 class GingaAsmBasicsTestCase(unittest.TestCase):
     
@@ -41,16 +54,17 @@ class GingaAsmBasicsTestCase(unittest.TestCase):
         self.f_frf = self.smpldir + '/' + 'FR880428.S0220.fits.gz'
         self.com_main = '../src/asmmkevt'
         self.com_sub  = '../src/asmtelemetryout'
+        self.com_qdp  = '../src/asm2qdp'
         os.environ['GINGA_CHATTER'] = '4'
         if (not os.path.exists(self.outdir)):
-            os.mkdir('test_output')
+            os.mkdir(self.outdir)
 
-    def tearDown(self):
-        # Clean up the temporary output directory
-        if (os.path.exists(self.outdir)):
-            for fname in os.listdir(self.outdir):
-                os.unlink(self.outdir+'/'+fname)
-                os.rmdir(self.outdir)
+    #def tearDown(self):
+    #    # Clean up the temporary output directory
+    #    if (os.path.exists(self.outdir)):
+    #        for fname in os.listdir(self.outdir):
+    #            os.unlink(self.outdir+'/'+fname)
+    #        os.rmdir(self.outdir)
 
     def test_main(self):
         # Creates a FITS file
@@ -144,4 +158,57 @@ class GingaAsmBasicsTestCase(unittest.TestCase):
         mat = re.search(r'\n +1 +BINTABLE [^\d]+[\d]+ +([\d]+)\(([\d]+)\) +([\d]+)', ret.stdout, flags=re.IGNORECASE)
         self.assertEqual(int(mat[2]), 5)  # 5 columns only
         self.assertGreater(int(mat[3]), 10000) # more than 10000 rows
+
+    def test_qdp(self):
+        # Creates a QDP file (and PCO file)
+        outdir = self.outdir
+
+        # Creates a FITS file
+        fout = self.outdir + '/' + 'outmain3.fits'
+        ret = subprocess.run([self.com_main, self.f_tel, self.f_frf, fout], timeout=None,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, #stderr=subprocess.DEVNULL,
+                             encoding='utf-8', shell=False)
+        self.assertEqual(ret.returncode, 0, 'Main run: stderr='+ret.stderr)
+
+        # Specifies 2 channels
+        foutroot = outdir + '/' + 'outqdp_4_13'
+        ret = subprocess.run([self.com_qdp, fout, foutroot, "4", "13"], timeout=None,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, #stderr=subprocess.DEVNULL,
+                             #stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, #stderr=subprocess.DEVNULL,
+                             encoding='utf-8', shell=False)
+        print(ret.stdout)  # DEBUG
+        print(ret.stderr)  # DEBUG
+        self.assertEqual(ret.returncode, 0, 'QDP run: stderr='+ret.stderr)
+
+        row = 110
+        arqdprow = qdp_data(foutroot+'.qdp', row)
+        print('DEBUG-py3:', arqdprow )  # DEBUG
+        y21ch13_qdp = arqdprow[4]  # 2nd detector, 2nd band (CH13 (from CH00))
+
+        # Summed channels (Default)
+        foutroot = outdir + '/' + 'outqdp_def'
+        ret = subprocess.run([self.com_qdp, fout, foutroot], timeout=None,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, #stderr=subprocess.DEVNULL,
+                             encoding='utf-8', shell=False)
+        self.assertEqual(ret.returncode, 0, 'QDP run: stderr='+ret.stderr)
+
+        row = 110
+        arqdprow = qdp_data(foutroot+'.qdp', row)
+        y21ch08_15_qdp = arqdprow[4]  # 2nd detector, 2nd band (CH13 (from CH00))
+
+        y21ch13_fits = -99
+        y21ch08_15_fits = 0
+        lines = flist_data(fout, row)
+        for ea in lines:
+            #print(ea)
+            if (len(ea) < 2): continue
+            mat = re.search(r'^ *Y21CH(\d\d)', ea[0])
+            if (mat):
+                if (mat[1] == '13'): y21ch13_fits = ea[2]
+                imat = int(mat[1])
+                if (8 <= imat): y21ch08_15_fits += imat 
+                if (mat[1] == '15'): break
+
+        self.assertEqual(y21ch13_qdp, y21ch13_fits, 'QDP Y21CH13==3')
+        self.assertEqual(y21ch08_15_qdp, y21ch08_15_fits, 'QDP Y21CH08_15')
 

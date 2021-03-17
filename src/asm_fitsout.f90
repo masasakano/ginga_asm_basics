@@ -589,10 +589,10 @@ if (IS_DEBUG()) print *,'DEBUG:833:ilocs=',ilocs
     if (irow > 0) then
       rethead%FRFSFN_S%val = relrows(irow)%frf%sfn
       rethead%FRFMJD_S%val = relrows(irow)%frf%mjds(1)
-      rethead%EULER_S1%val = rad2deg(relrows(irow)%frf%eulers(1, 1))
+      rethead%EULER_S1%val = rad2deg(relrows(irow)%frf%eulers(1, 1))   ! radian to degree
       rethead%EULER_S2%val = rad2deg(relrows(irow)%frf%eulers(2, 1))
       rethead%EULER_S3%val = rad2deg(relrows(irow)%frf%eulers(3, 1))
-      rethead%D_EUL_S1%val = rad2deg(relrows(irow)%frf%d_eulers(1, 1))
+      rethead%D_EUL_S1%val = rad2deg(relrows(irow)%frf%d_eulers(1, 1)) ! radian to degree
       rethead%D_EUL_S2%val = rad2deg(relrows(irow)%frf%d_eulers(2, 1))
       rethead%D_EUL_S3%val = rad2deg(relrows(irow)%frf%d_eulers(3, 1))
       rethead%ALTIT_S%val  = relrows(irow)%frf%height(1)
@@ -777,7 +777,7 @@ if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
     call FTPCOM(unit, OUTFTCOMMENT2, status)  ! defined in asm_fits_common
 
     if (present(comname) .and. present(args)) then
-      strarg = 'Command: '//trim(comname)
+      strarg = 'Command: '//trim(basename(comname))
       do i=1, size(args)
         strarg = trim(strarg) // ' ' // trim(args(i))
       end do
@@ -1333,6 +1333,226 @@ if (IS_DEBUG()) print *,'DEBUG: test-close-status=',status,' / ',trim(errtext)
     if (allocated(tforms)) deallocate(tforms)
     if (allocated(tunits)) deallocate(tunits)
   end subroutine write_asm_evt_fits
+
+  ! Read multiple channels from FITS and returns a (Integer*2) 2-dim Array (value, detector) for the summed data
+  function get_asm_summed_chan(funit, chan_l_h, nrows) result(retchans)
+    integer, intent(in) :: funit, nrows
+    integer, dimension(2), intent(in) :: chan_l_h ! Low and high channels to sum
+    integer(kind=ip2), dimension(nrows, NUM_INSTR) :: retchans  ! NUM_INSTR defined in asm_fits_common
+
+    integer(kind=ip2), dimension(nrows) :: tmpchs
+    integer(kind=ip2) :: nullval
+    logical :: anyf
+    integer :: status, colnum, ich, idet
+
+if (IS_DEBUG()) print *,'DEBUG:259: nrows=',nrows,' chan_l_h=',chan_l_h
+    do idet=1, NUM_INSTR
+      retchans(:, idet) = 0 
+      do ich=chan_l_h(1), chan_l_h(2)
+        colnum = (idet-1)*NCHANS_PHA + ich + 1   ! NCHANS_PHA defined in asm_fits_common
+if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:261: colnum=',colnum
+        ! FiTs_GeT_Column_Value: FTGCV[SBIJKEDCM](unit,colnum,frow,felem,nelements,nullval, >values,anyf,status)
+        !  anyf is True if any of the values is undefined.
+        call FTGCVI(funit, colnum, 1, 1, nrows, nullval, tmpchs, anyf, status)
+        retchans(:, idet) = retchans(:, idet) + tmpchs
+      end do
+if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:269: sum=',sum(retchans(:, idet))
+    end do
+  end function get_asm_summed_chan
+
+  ! Read ASM fits and write QDP/PCO
+  subroutine asm_time_row_det_band(fname, chans, artime, outchans)
+    implicit none
+    character(len=*), intent(in) :: fname  ! fname for ASM.fits
+    integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band)
+    real(kind=dp8), dimension(:), allocatable, intent(out) :: artime
+    integer, dimension(:,:,:), allocatable, intent(out) :: outchans ! (Row(channel-values), Detector, Band(Low(1)/High(2)))
+    real(kind=dp8) :: nullvald
+    integer :: funit, blocksize, hdutype, status=-999, colnum
+    integer :: nrows, iband
+    logical :: existdat, anyf
+    character(len=1024) :: comment
+    character(len=MAX_FITS_CHAR) :: coltemplate
+    type(t_form_unit) :: tmpfu
+
+    call FTGIOU(funit, status)
+!    if (status .ne. 0) then
+!write(stderr, '("WARNING: funit=",I15)') funit
+!!funit = 161
+!    end if
+    call FTOPEN(funit, fname, 0, blocksize, status)  ! 0: readonly
+    !call FTOPEN(funit, trim(fname), 0, blocksize, status)  ! 0: readonly
+    !call ftopen(funit, fname, 0, blocksize, status)  ! 0: readonly
+    call err_exit_if_status(status, 'Failed to open the FITS to read: '//trim(fname))
+
+    ! Move to the 1st extention
+    call FTMAHD(funit, 2, hdutype, status)
+    call err_exit_if_status(status, 'Failed to move to the 1st extension: '//trim(fname))
+
+    call FTGKYL(funit, 'EXISTDAT', existdat, comment, status)
+    if (.not. existdat) then
+      write(stderr, '(A)') 'Input FITS ('//trim(fname)//') contains no data. No files are created.'
+      call EXIT(0)
+    end if
+
+    ! FiTs_Get_Number_of_RoWs
+    call FTGNRW(funit, nrows, status) ! cf. FTGNRWLL() for INT*64
+    if ((status .ne. 0) .or. (nrows .le. 0)) then
+      call err_exit_with_msg('Number of rows are strange: '//ladjusted_int(nrows)//' / status='//ladjusted_int(status))
+      stop  ! redundant
+    end if
+
+    allocate(outchans(nrows, NUM_INSTR, size(chans, 2))) ! (Row, Detector, Band)
+    allocate(artime(nrows)) ! for Tstart
+if (IS_DEBUG()) print *,'DEBUG:245: out-sizes=',size(outchans, 1),' s2=',size(outchans, 2),' s3=',size(outchans, 3)
+
+    !! FiTs_Get_Number_of_CoLumns
+    !call FTGNCL(funit, nc, status) ! read TFIELDS
+    !if ((status .ne. 0) .or. (nc .ne. 1)) then
+    !  write(errmsg, '("TFIELDS (number of columns) is not 1 but ", i1)') nc
+    !  call err_exit_with_msg(errmsg)
+    !  stop  ! redundant
+    !end if
+
+    !! FiTs_GeT_CoLumn (Get the datatype of a column): FTGTCL(unit,colnum, > datacode,repeat,width,status)
+    !call FTGTCL(funit, 1, datacode, repeat, width, status)
+    !if ((datacode .ne. 11) .or. (repeat .ne. nbytespercard)) then  ! namely, if TFORM1 != '144B'
+    !  errmsg = 'The format (TFORM1) is not 144B.'
+    !  call err_exit_with_msg(errmsg)
+    !  stop  ! redundant
+    !end if
+
+    ! Get Tstart (Time column)
+    tmpfu = get_element('Tstart', COL_FORM_UNITS)
+    coltemplate = trim(tmpfu %root)
+
+    ! Get column number for Tstart (should be 97)
+    ! FTGCNO(unit,casesen,coltemplate, > colnum,status) ! FiT_Get_Column_from_Name_to_nO
+    call FTGCNO(funit, .false., coltemplate, colnum, status)
+
+    call FTGCVD(funit, colnum, 1, 1, nrows, nullvald, artime, anyf, status)
+
+    ! Get summed channle data
+    do iband=1, size(chans, 2)
+      outchans(:,:,iband) = get_asm_summed_chan(funit, chans(:, iband), nrows)
+if (IS_DEBUG()) print *,'DEBUG:369: iband=',iband,' sum=',sum(outchans(:,2,iband))
+    end do
+
+    call FTCLOS(funit, status)
+    call err_exit_if_status(status, 'Failed to close the FITS: '//trim(fname))
+    call FTFIOU(funit, status)
+
+  end subroutine asm_time_row_det_band
+
+
+  ! Read ASM fits and write QDP/PCO
+  subroutine write_qdp(fname, outroot, chans, artime, outchans, status)
+    implicit none
+    real(dp8), parameter :: ys1 = 0.75, ys2 = 0.9+1/60.d0, yd1 = -(0.1+1/30.d0)  ! QDP Y-starting positions 1 and 2 and difference
+    character(len=*), intent(in) :: fname, outroot  ! fname for ASM.fits
+    integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band) ! for displaying purpose only
+    real(dp8), dimension(:), intent(in) :: artime
+    integer, dimension(:,:,:), intent(in) :: outchans ! (Row(channel-values), Detector(6), Band(Low(1)/High(2)))
+    integer, intent(out), optional :: status
+    character(len=2048) :: qdpfile, pcofile
+    integer :: iy, idet, irow, iband, statustmp
+    integer :: unit, colnum
+    character(len=5), dimension(size(chans, 2)) :: strchs
+
+    qdpfile = trim(outroot)//'.qdp'
+    pcofile = trim(outroot)//'.pco'
+
+if (IS_DEBUG()) print *,'DEBUG:142: out-beg sum=',sum(outchans(:,2,1))
+    do iband=1,size(chans,2)
+      if (chans(1, iband) == chans(2, iband)) then
+        write(strchs(iband), '(I0.2)') chans(1, iband)
+      else
+        write(strchs(iband), '(I0.2,"-",I0.2)') chans(1, iband), chans(2, iband)
+      end if
+    end do
+
+    call FTGIOU(unit, status)
+
+if (IS_DEBUG()) print *,'DEBUG:145: size1=',size(outchans,1),'sizes=',size(outchans, 2),' s3=',size(outchans, 3)
+    ! QDP file
+    open(UNIT=unit, file=qdpfile, IOSTAT=status, STATUS='UNKNOWN')  ! clobber=yes (i.e., overwrite, maybe)
+    write(unit, '("@",A)') trim(pcofile)
+    write(unit, '("! Tstart ")', advance='no')
+    iy = 1
+    do idet=1, size(outchans, 2)
+      do iband=1, size(outchans, 3)
+        iy = iy + 1
+        write(unit, '(" Y"I1,"FW",I1,"_CH",A)', advance='no') mod(idet-1,2)+1, (idet-1)/2+1, strchs(iband)
+      end do
+    end do
+    write(unit, '(A)') ''
+
+if (IS_DEBUG()) print *,'DEBUG:157: out-after sum=',sum(outchans(:,2,1))
+    do irow=1, size(outchans, 1)
+      write(unit, '(E20.14)', advance='no') artime(irow)
+      do idet=1, size(outchans, 2)
+        do iband=1, size(outchans, 3)
+          write(unit, '(" ",I4)', advance='no') outchans(irow, idet, iband)
+        end do
+      end do
+      write(unit, '(A)') ''
+    end do
+    close(UNIT=unit, IOSTAT=statustmp)
+
+    ! PCO file
+    open(UNIT=unit, file=pcofile, IOSTAT=status, STATUS='UNKNOWN')  ! clobber=yes (i.e., overwrite, maybe)
+    write(unit, '("CSIZ  0.60")')
+    write(unit, '("LAB T ASM light curves (CH:",A,") of",A)') trim(join_chars(strchs, ', ')), trim(basename(fname))
+    write(unit, '("LAB F ",A)') trim(basename(fname))
+    !iy = 1
+    do idet=1, size(outchans, 2)
+    !  do iband=1, size(outchans, 3)
+    !    iy = iy + 1
+    !    write(unit, '("LAB G",I1," Y"I1,"FW",I1,"_CH",A)') iy, mod(idet-1,2)+1, (idet-1)/2+1, strchs(iband)
+    !  end do
+     !write(unit, '("LAB G",I1," Y"I1,"FW",I1)') idet+1, mod(idet-1,2)+1, (idet-1)/2+1
+    end do
+
+    ! If default (aka, 6 detectors for 2 bands):
+    if ((size(outchans, 2) == 6) .and. (size(outchans, 3) == 2)) then
+      do idet=1, size(outchans, 2)
+        write(unit, '("win ",I2)') idet+1
+        if (idet == 1) then
+          write(unit, '("LAB T ASM light curves (CH:",A,") of",A)') trim(join_chars(strchs, ', ')), trim(basename(fname))
+          write(unit, '("LAB F ",A)') trim(basename(fname))
+        end if
+        write(unit, '("yplot ",I2," ",I2)') idet*2, idet*2+1
+        write(unit, '("loc 0 ",F12.10," 1 ",F12.10)') ys1+(idet-1)*yd1, ys2+(idet-1)*yd1
+        write(unit, '("LAB Y Y"I1,"FW",I1)') mod(idet-1,2)+1, (idet-1)/2+1
+        if (idet .ne. size(outchans, 2)) write(unit, '("lab nx off")')
+      end do
+    end if
+    write(unit, '("LAB X Tstart")')
+    write(unit, '("R X")')
+    
+    close(UNIT=unit, IOSTAT=statustmp)
+    call FTFIOU(unit, statustmp)
+  end subroutine write_qdp
+
+  ! Read ASM fits and write QDP/PCO
+  subroutine read_asm_write_qdp(fname, outroot, chans) !, status)
+    implicit none
+    character(len=*), intent(in) :: fname, outroot  ! fname for ASM.fits
+    integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band)
+    integer :: status
+    real(kind=dp8), dimension(:), allocatable :: artime
+    integer, dimension(:,:,:), allocatable :: outchans
+
+if (IS_DEBUG()) print *,'DEBUG:112: starting(sub)... chans=',chans, ' outroot=', trim(outroot)
+    call asm_time_row_det_band(fname, chans, artime, outchans)
+if (IS_DEBUG()) print *,'DEBUG:411: after.(sub) sum=',sum(outchans(:,2,1))
+if (IS_DEBUG()) print *,'DEBUG:413: after.(sub)... a=',artime(1:4)
+    call write_qdp(fname, outroot, chans, artime, outchans, status)
+if (IS_DEBUG()) print *,'DEBUG:812: end.(sub)... chans=',chans, ' outroot=', trim(outroot)
+
+    if (allocated(artime)) deallocate(artime)
+    if (allocated(outchans)) deallocate(outchans)
+  end subroutine read_asm_write_qdp
 
   ! Output FITS file of the ASM data
   subroutine write_asm_fits(fname, fitshead, trows, frfrows, relrows, status)

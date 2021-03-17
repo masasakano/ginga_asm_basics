@@ -74,7 +74,7 @@ program asmmkevt
       call EXIT(0)
     end if
     j = j + 1
-    if (j > 3) call err_exit_with_msg('The number of the main argument must be exactly 3, but given more.')
+    if (j > 3) call err_exit_with_msg('The number of the main arguments must be exactly 3, but given more.')
     argv(j)%val = arg
     if (i == 1) then
       telfil= arg  ! Telemetry
@@ -87,7 +87,7 @@ program asmmkevt
       write (*,*) 'Outfile:   '//trim(arg)
     end if
   end do
-  if (j < 3) call err_exit_with_msg('The number of the main argument must be exactly 3, but given only '//trim(ladjusted_int(j)))
+  if (j < 3) call err_exit_with_msg('The number of the main arguments must be exactly 3, but given only '//trim(ladjusted_int(j)))
 
 !if (IS_DEBUG()) WRITE (*,*) 'fname=' // TRIM(fname)
 
