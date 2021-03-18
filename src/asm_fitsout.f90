@@ -559,7 +559,7 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
 
     ! Creation date
     call date_and_time(ZONE=zone, VALUES=vals)
-    write(rethead%DATE%val, '(I4,"-",I0.2,"-",I0.2," ",I0.2,":",I0.2,":",I0.2,".",I0.3,A)') &
+    write(rethead%DATE%val, '(I4,"-",I0.2,"-",I0.2,"T",I0.2,":",I0.2,":",I0.2,".",I0.3,A)') &
        vals(1), vals(2), vals(3), vals(5), vals(6), vals(7), vals(8), trim(zone)
     
     ! Start/End times
