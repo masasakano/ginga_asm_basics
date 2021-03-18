@@ -18,7 +18,9 @@ Usage is
     
 ## Sub-program ##
 
-`asmmkevt` outputs for the period of data where ASM-Mode is ON. Run `asmtelemetryout` instead to output selected columns for the entire period:
+### asmtelemetryout ###
+
+`asmtelemetryout` outputs for the period of data where ASM-Mode is ON. Run `asmtelemetryout` instead to output selected columns for the entire period:
 
     GINGA_CHATTER=4 asmtelemetryout ../../ginga_samples/ginga_sirius_P198804280220.fits \
       ../../ginga_samples/FR880428.S0220.fits ../../ginga_samples/asmtelemetry_try06.fits \
@@ -27,6 +29,28 @@ Usage is
 You can view the options with
 
     asmtelemetryout -h
+
+### asm2qdp ###
+
+`asm2qdp` outputs a QDP and PCO files.
+
+    USAGE: asm2qdp ASM.fits OUT_ROOT [CH_A CH_B]
+
+For the command-line 3rd and 4th arguments `CH_n`, the number n is 0-15 (as in the PHA mode; for the Time-mode, interpret the 'H'-band as 08-15).
+
+You must specify either a pair or none.  If you specify a pair, the data for the specified two channels are output.
+If you specify none, the sum of CH00-07 and 08-15 are output.
+
+Then, `OUT_ROOT.qdp` and `OUT_ROOT.pco` are created (if they exist, they are overwritten).
+The format of the QDP file is:
+
+    MJD Y1FW1CH_A Y1FW1CH_B Y2FW1CH_A Y2FW1CH_B Y1FW2CH_A Y1FW2CH_B ...
+
+At the top (2nd line), the comment describes the column.
+
+You can view the options with
+
+    asm2qdp -h
 
 ## Tests ##
 
@@ -59,6 +83,7 @@ You may set the environmental variable `GINGA_DEBUG` for testing.  Some diagnost
 * `asmmkevt.f90`: Main program to deal with the command-line arguments and run the process.
 * `err_exit.f90`: Error handling routines.
 * `fort_util.f90`: General Fortran90 utility routines.
+* `test/*.{f90,sh,py}` : For unit and integration testings.
 
 ## Further read ##
 

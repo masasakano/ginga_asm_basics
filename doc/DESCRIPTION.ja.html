@@ -33,10 +33,16 @@
 <li><a href="#frameのメインデータ-128-bytes-ワード"><span class="toc-section-number">1.1.2</span> Frameのメインデータ (128 bytes (=ワード))</a></li>
 </ul></li>
 </ul></li>
-<li><a href="#coding-style"><span class="toc-section-number">2</span> Coding style</a></li>
-<li><a href="#parameters"><span class="toc-section-number">3</span> Parameters</a></li>
-<li><a href="#他の主要type-s-特に読み込んだり計算したデータを保持するもの"><span class="toc-section-number">4</span> 他の主要type-s (特に読み込んだり計算したデータを保持するもの)</a></li>
-<li><a href="#アルゴリズム"><span class="toc-section-number">5</span> アルゴリズム</a></li>
+<li><a href="#仕様補足"><span class="toc-section-number">2</span> 仕様補足</a></li>
+<li><a href="#coding-style"><span class="toc-section-number">3</span> Coding style</a></li>
+<li><a href="#parameters"><span class="toc-section-number">4</span> Parameters</a></li>
+<li><a href="#他の主要type-s-特に読み込んだり計算したデータを保持するもの"><span class="toc-section-number">5</span> 他の主要type-s (特に読み込んだり計算したデータを保持するもの)</a></li>
+<li><a href="#アルゴリズム"><span class="toc-section-number">6</span> アルゴリズム</a></li>
+<li><a href="#その他"><span class="toc-section-number">7</span> その他</a>
+<ul>
+<li><a href="#frame番号とsf番号"><span class="toc-section-number">7.1</span> Frame番号とSF番号</a></li>
+<li><a href="#frfとのマッチング"><span class="toc-section-number">7.2</span> FRFとのマッチング</a></li>
+</ul></li>
 </ul>
 </nav>
 <section id="背景と用語定義" class="level1" data-number="1">
@@ -46,6 +52,7 @@
 <li><code>asmmkevt</code> : 本プログラム。ASM-mode がONの時のデータのみ抽出。</li>
 <li><code>asmtelemetryout</code> : 副プログラム。Telemetry FITSにある全データ時間領域について、ただし、指定したパラメーターのテーブルのみ出力(パラメーターを全く与えなければ、<code>asmmkevt</code> と同様に全パラメーターが出力される)。</li>
 </ul>
+<p>いずれも <code>-h</code> オプションだけ与えると、ヘルプメッセージが表示される。</p>
 <section id="gingaのtelemetryデータ構造" class="level2" data-number="1.1">
 <h2 data-number="1.1"><span class="header-section-number">1.1</span> GingaのTelemetryデータ構造</h2>
 <ol type="1">
@@ -79,10 +86,13 @@
 <ul>
 <li><code>millisec = Byte05 * 256 + Byte06</code> (<code>readfits_SF_WD.c</code> による)</li>
 </ul></li>
-<li>Byte07=Counter_A1</li>
-<li>Byte08=Counter_A2</li>
-<li>Byte09=Counter_B1</li>
-<li>Byte10=Counter_B2</li>
+<li>Byte07=Counter_A1 (TI counter)</li>
+<li>Byte08=Counter_A2 (SF+Frame番号情報)</li>
+<li>Byte09=Counter_B1 (TI counter)</li>
+<li>Byte10=Counter_B2 (TI counter)
+<ul>
+<li>TIの値はおそらく <code>Byte07*65536 + Byte09*256 + Byte10</code></li>
+</ul></li>
 <li>Byte11=real(1) or stored(2)</li>
 <li>Byte12=bit-rate-low(0) or high(1)</li>
 <li>Byte13, 14, 15: not used</li>
@@ -97,7 +107,7 @@
 </blockquote>
 <p>になる(大興電子による)。</p>
 <p>すなわち、大雑把に言って、(通信の遅れなどを無視すれば)フレーム開始時刻ということになる。</p>
-<p>なお、その「年」については、Telemetry FITSのFITS Headerに観測日の記載があるので、それを信用する(Telemetry filesのファイル名に現れる数字の最初の4桁の、FRFのファイル名の最初の2桁、も観測年と一致するはずである—年末年始を跨ぐ観測についてどうなるかは知らないが)。なお、念のため、本パッケージのプログラムでは、年末年始を跨いだ観測(Gingaの寿命中、数回あると思われる)についても考慮し、正しく年を推定している。</p>
+<p>なお、その「年」については、Telemetry FITSのFITS Headerに観測日(DATE-OBS)の記載があるので、それを信用する(Telemetry filesのファイル名に現れる数字の最初の4桁の、FRFのファイル名の最初の2桁、も観測年と一致するはずである—年末年始を跨ぐ観測についてどうなるかは知らないが)。なお、念のため、本パッケージのプログラムでは、年末年始を跨いだ観測(Gingaの寿命中、数回あると思われる)についても考慮し、正しく年を推定している。</p>
 </section>
 <section id="frameのメインデータ-128-bytes-ワード" class="level3" data-number="1.1.2">
 <h3 data-number="1.1.2"><span class="header-section-number">1.1.2</span> Frameのメインデータ (128 bytes (=ワード))</h3>
@@ -108,11 +118,22 @@
 <li>PHA Mode : Table 5.5.5, pp.233</li>
 <li>Time Modeta: Table 5.5.6, pp.234</li>
 </ul>
+<hr />
 </section>
 </section>
 </section>
-<section id="coding-style" class="level1" data-number="2">
-<h1 data-number="2"><span class="header-section-number">2</span> Coding style</h1>
+<section id="仕様補足" class="level1" data-number="2">
+<h1 data-number="2"><span class="header-section-number">2</span> 仕様補足</h1>
+<ul>
+<li>Telemetry dataでASM-ModeがONの時、FRFの該当framesは欠落している。したがって、ASM-Mode中の較正済の正確な姿勢情報を得ることができない。</li>
+<li>次善の策として、ASM-Modeに入る直前と入った直後のできるだけ近い時刻のEuler角などの姿勢情報をFITS Headerに記載する。</li>
+<li>もし該当するデータが存在しない場合(例: ASM-Modeのまま、Telemetry FITSが終了した場合のASM-Mode直後の姿勢)、そのデータには、-360よりも小さい値を入れる(具体的には -1024.0)。</li>
+<li>なお、一般的に本パッケージでは、浮動小数点データの初期値として -1024.0, 整数データの初期値として -999 をセットしている。そのデータを評価しようとした結果として評価不能の場合は、整数データには、原則として -1 をセットする。たとえば、FRFが無い時は、<code>sunps</code>の値は -1 である。本パッケージは、すべてのデータを評価しようと試みるはずなので、出力ファイルのヘッダーには、値 -999 は存在しないはずである。</li>
+</ul>
+<hr />
+</section>
+<section id="coding-style" class="level1" data-number="3">
+<h1 data-number="3"><span class="header-section-number">3</span> Coding style</h1>
 <p>必ずしも一貫していないが、以下のスタイルを採用。</p>
 <ul>
 <li>原則として、Fortran 77 の書き方ではなく、Fortran 90 の書き方を採用。</li>
@@ -125,8 +146,8 @@
 <li>すべての配列の添字は、1から始まる。</li>
 </ul>
 </section>
-<section id="parameters" class="level1" data-number="3">
-<h1 data-number="3"><span class="header-section-number">3</span> Parameters</h1>
+<section id="parameters" class="level1" data-number="4">
+<h1 data-number="4"><span class="header-section-number">4</span> Parameters</h1>
 <p>基本的なパラメーターは、<code>asm_fits_common.f90</code> にある。</p>
 <ul>
 <li>parameter :: <code>OUTFTCOMMENT1</code>: すべてのFITSの第1 extensionの末尾につけられるコメント</li>
@@ -149,8 +170,8 @@
 </ul>
 <p>したがって、将来的にたとえばSlew modeのBIT番号を変更したいなどの場合、上のtypesを変更するとよい。</p>
 </section>
-<section id="他の主要type-s-特に読み込んだり計算したデータを保持するもの" class="level1" data-number="4">
-<h1 data-number="4"><span class="header-section-number">4</span> 他の主要type-s (特に読み込んだり計算したデータを保持するもの)</h1>
+<section id="他の主要type-s-特に読み込んだり計算したデータを保持するもの" class="level1" data-number="5">
+<h1 data-number="5"><span class="header-section-number">5</span> 他の主要type-s (特に読み込んだり計算したデータを保持するもの)</h1>
 <ul>
 <li><code>type asm_telem_row</code>: Telemetry FITSを読んで、各row (つまり16-byte frame-header と 128-byte frameデータ)を解釈して、(typeのメンバーとしての)名前をつけてここに格納。
 <ul>
@@ -175,9 +196,10 @@
 <li>(読み込んだTelemetry/FRF FITSに存在せず)新規に出力するパラメーターに関しては、デフォルトとのコメントもここで定義する。</li>
 </ul></li>
 </ul>
+<p>これらの変数の内容を表示するための subroutine <code>dump_type()</code> が用意されている(<code>INTERFACE</code> を使ってtype非依存にしている)。</p>
 </section>
-<section id="アルゴリズム" class="level1" data-number="5">
-<h1 data-number="5"><span class="header-section-number">5</span> アルゴリズム</h1>
+<section id="アルゴリズム" class="level1" data-number="6">
+<h1 data-number="6"><span class="header-section-number">6</span> アルゴリズム</h1>
 <ol type="1">
 <li>主プログラム(<code>asmmkevt.f90</code>, <code>asmtelemetryout.f90</code>)
 <ul>
@@ -220,7 +242,28 @@
 <li><code>fort_util.f90</code>: General Fortran90 utility routines.</li>
 </ul></li>
 </ol>
+</section>
+<section id="その他" class="level1" data-number="7">
+<h1 data-number="7"><span class="header-section-number">7</span> その他</h1>
+<section id="frame番号とsf番号" class="level2" data-number="7.1">
+<h2 data-number="7.1"><span class="header-section-number">7.1</span> Frame番号とSF番号</h2>
+<p>Telemetry FITSの各Frameでは、frame-header (16-bytes) の Byte08 (<code>Counter_A2</code>)および frame-main-data (128-bytes)のW3(<code>FI</code> (Frame-Information?) と呼ばれる)は、SF番号とFrame番号との情報を含む(両者は完全に一致するはず)。</p>
+<p>Formatは中間報告書 Table 5.1.3, pp.201。端的には上位2 bitsがSF番号(わずか0〜3だけで回転)、下位6 bitsがFrame番号である。</p>
+<p>Frame番号は、各SFにつき、0〜63まで順番に回っていく。SF番号は、0〜3で回っていく……が、たまに不連続になったりあるいは同じSF番号が異なるはずのSFで連続するケースが認められた(bitrate が変化した時らしい)。</p>
+<p>FRF においてつけられる、SF番号は、Telemetry FITSの(Frame番号から推測した)SFの通し番号と一致するように見える。たとえば、FRFの方で途中の(ある時間帯の)データに欠落があっても、その時間帯の後のデータでは、SFの通し番号がTelemetry FITSから予想される番号と一致する。がただし、FRFの方がSFsの数がずっと多いケースもあった。</p>
+</section>
+<section id="frfとのマッチング" class="level2" data-number="7.2">
+<h2 data-number="7.2"><span class="header-section-number">7.2</span> FRFとのマッチング</h2>
+<ul>
+<li>(LACの)FRFでは、ASM-mode のデータ(もしくはLACモードではないデータ)のSFは欠落しているようだ。</li>
+<li>FRFから <code>GETOAT()</code> で得たMJDは、第32Frame (=F31)の先頭の時刻と1μ秒程度の精度で一致する(1μ秒程度はずれることがあり、ずれは一定ではない)。
+<ul>
+<li>すなわち、SFの開始時刻ではなく、そのSFの真ん中の時刻。</li>
+<li>Frame同士の時間間隔は Bitrate-H でも 62.5 ms (中間報告書 Table 4.1.2, pp.187)なので、1μ秒程度のずれはおそらく問題にならない。</li>
+</ul></li>
+</ul>
 <hr />
+</section>
 </section>
 </body>
 </html>

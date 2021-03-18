@@ -41,7 +41,7 @@ def qdp_data(fname, row):
             if (re.search(r'^ *(@|!)', line)): continue
             iline += 1
             if (iline == row):
-                print('DEBUG:sub',line) # DEBUG
+                if os.environ.get('GINGA_DEBUG') is not None: print('DEBUG:sub',line) # DEBUG
                 return line.split()
 
 
@@ -59,12 +59,16 @@ class GingaAsmBasicsTestCase(unittest.TestCase):
         if (not os.path.exists(self.outdir)):
             os.mkdir(self.outdir)
 
-    #def tearDown(self):
-    #    # Clean up the temporary output directory
-    #    if (os.path.exists(self.outdir)):
-    #        for fname in os.listdir(self.outdir):
-    #            os.unlink(self.outdir+'/'+fname)
-    #        os.rmdir(self.outdir)
+    def tearDown(self):
+        # Clean up the temporary output directory
+        if (os.path.exists(self.outdir)):
+            if os.environ.get('GINGA_DEBUG') is not None:
+                print('NOTE: Temporary directory remains b/c GINGA_DEBUG is set: '+self.outdir)
+                return
+
+            for fname in os.listdir(self.outdir):
+                os.unlink(self.outdir+'/'+fname)
+            os.rmdir(self.outdir)
 
     def test_main(self):
         # Creates a FITS file
@@ -172,22 +176,25 @@ class GingaAsmBasicsTestCase(unittest.TestCase):
 
         # Specifies 2 channels
         foutroot = outdir + '/' + 'outqdp_4_13'
-        ret = subprocess.run([self.com_qdp, fout, foutroot, "4", "13"], timeout=None,
+        arcom_4_13 = [self.com_qdp, fout, foutroot, "4", "13"]
+        ret = subprocess.run(arcom_4_13, timeout=None,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, #stderr=subprocess.DEVNULL,
                              #stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, #stderr=subprocess.DEVNULL,
                              encoding='utf-8', shell=False)
-        print(ret.stdout)  # DEBUG
-        print(ret.stderr)  # DEBUG
+        if os.environ.get('GINGA_DEBUG') is not None: print(ret.stdout)  # DEBUG
+        if os.environ.get('GINGA_DEBUG') is not None: print(ret.stderr)  # DEBUG
         self.assertEqual(ret.returncode, 0, 'QDP run: stderr='+ret.stderr)
 
         row = 110
         arqdprow = qdp_data(foutroot+'.qdp', row)
-        print('DEBUG-py3:', arqdprow )  # DEBUG
+        if os.environ.get('GINGA_DEBUG') is not None: print('DEBUG-py3:', arqdprow )  # DEBUG
         y21ch13_qdp = arqdprow[4]  # 2nd detector, 2nd band (CH13 (from CH00))
+        y21ch13_qdp_all = arqdprow  # 2nd detector, 2nd band (CH13 (from CH00))
 
         # Summed channels (Default)
         foutroot = outdir + '/' + 'outqdp_def'
-        ret = subprocess.run([self.com_qdp, fout, foutroot], timeout=None,
+        arcom_def = [self.com_qdp, fout, foutroot]
+        ret = subprocess.run(arcom_def, timeout=None,
                              stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, #stderr=subprocess.DEVNULL,
                              encoding='utf-8', shell=False)
         self.assertEqual(ret.returncode, 0, 'QDP run: stderr='+ret.stderr)
@@ -196,7 +203,7 @@ class GingaAsmBasicsTestCase(unittest.TestCase):
         arqdprow = qdp_data(foutroot+'.qdp', row)
         y21ch08_15_qdp = arqdprow[4]  # 2nd detector, 2nd band (CH13 (from CH00))
 
-        y21ch13_fits = -99
+        y21ch13_fits = "-99"
         y21ch08_15_fits = 0
         lines = flist_data(fout, row)
         for ea in lines:
@@ -206,9 +213,10 @@ class GingaAsmBasicsTestCase(unittest.TestCase):
             if (mat):
                 if (mat[1] == '13'): y21ch13_fits = ea[2]
                 imat = int(mat[1])
-                if (8 <= imat): y21ch08_15_fits += imat 
+                if (8 <= imat): y21ch08_15_fits += int(ea[2])
                 if (mat[1] == '15'): break
 
-        self.assertEqual(y21ch13_qdp, y21ch13_fits, 'QDP Y21CH13==3')
-        self.assertEqual(y21ch08_15_qdp, y21ch08_15_fits, 'QDP Y21CH08_15')
+        # if os.environ.get('GINGA_DEBUG') is not None: print(f'DEBUG: FITS-sum(08-15)={y21ch08_15_fits}\n')  # DEBUG
+        self.assertEqual(y21ch13_qdp, y21ch13_fits, 'QDP Y21CH13==3: Command: '+' '.join(arcom_4_13)+"\n> "+' '.join(y21ch13_qdp_all))
+        self.assertEqual(int(y21ch08_15_qdp), y21ch08_15_fits, 'QDP Y21CH08_15: Command: '+' '.join(arcom_def))
 

@@ -1177,6 +1177,7 @@ if (IS_DEBUG()) call dump_type(relrows(5))
     if (allocated(coli)) deallocate(coli)
     if (allocated(colj)) deallocate(colj)
     if (allocated(cold)) deallocate(cold)
+    if (allocated(cols8)) deallocate(cols8)
   end subroutine write_cols
 
   ! Output FITS file of the ASM data
@@ -1246,7 +1247,7 @@ end if
     call ftgiou(unit,status)
     if ((status .ne. 0) .and. ((unit > 999) .or. (unit < 9))) then
       write(stderr,'("WARNING: Failed in ftgiou(): unit = ",I12,". Manually reset to ",I3)') unit, MY_FUNIT
-      unit = 159
+      unit = MY_FUNIT
     end if
 
     ! create the new empty FITS file blocksize=1
@@ -1332,6 +1333,7 @@ if (IS_DEBUG()) print *,'DEBUG: test-close-status=',status,' / ',trim(errtext)
     if (allocated(ttypes)) deallocate(ttypes)
     if (allocated(tforms)) deallocate(tforms)
     if (allocated(tunits)) deallocate(tunits)
+    if (allocated(colheads)) deallocate(colheads)
   end subroutine write_asm_evt_fits
 
   ! Read multiple channels from FITS and returns a (Integer*2) 2-dim Array (value, detector) for the summed data
@@ -1356,17 +1358,20 @@ if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:261: colnum=',colnum
         call FTGCVI(funit, colnum, 1, 1, nrows, nullval, tmpchs, anyf, status)
         retchans(:, idet) = retchans(:, idet) + tmpchs
       end do
-if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:269: sum=',sum(retchans(:, idet))
+if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:268: sum=',sum(retchans(:, idet))
+if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:269: 110=',retchans(110, idet)
     end do
+if (IS_DEBUG())                   print *,'DEBUG:270: 110=',retchans(110, 2)
   end function get_asm_summed_chan
 
-  ! Read ASM fits and write QDP/PCO
+  ! Read ASM fits and returns required Arrays to output.
   subroutine asm_time_row_det_band(fname, chans, artime, outchans)
     implicit none
+    integer, parameter :: MY_FUNIT = 161  ! arbitrary
     character(len=*), intent(in) :: fname  ! fname for ASM.fits
     integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band)
     real(kind=dp8), dimension(:), allocatable, intent(out) :: artime
-    integer, dimension(:,:,:), allocatable, intent(out) :: outchans ! (Row(channel-values), Detector, Band(Low(1)/High(2)))
+    integer(kind=ip2), dimension(:,:,:), allocatable, intent(out) :: outchans ! (Row(channel-values), Detector, Band(Low(1)/High(2)))
     real(kind=dp8) :: nullvald
     integer :: funit, blocksize, hdutype, status=-999, colnum
     integer :: nrows, iband
@@ -1376,10 +1381,10 @@ if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:269: sum=',sum(retchans(:, idet
     type(t_form_unit) :: tmpfu
 
     call FTGIOU(funit, status)
-!    if (status .ne. 0) then
-!write(stderr, '("WARNING: funit=",I15)') funit
-!!funit = 161
-!    end if
+    if ((status .ne. 0) .and. ((funit > 999) .or. (funit < 9))) then
+      write(stderr,'("WARNING: Failed in ftgiou(): unit = ",I12,". Manually reset to ",I3)') funit, MY_FUNIT
+      funit = MY_FUNIT
+    end if
     call FTOPEN(funit, fname, 0, blocksize, status)  ! 0: readonly
     !call FTOPEN(funit, trim(fname), 0, blocksize, status)  ! 0: readonly
     !call ftopen(funit, fname, 0, blocksize, status)  ! 0: readonly
@@ -1398,7 +1403,7 @@ if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:269: sum=',sum(retchans(:, idet
     ! FiTs_Get_Number_of_RoWs
     call FTGNRW(funit, nrows, status) ! cf. FTGNRWLL() for INT*64
     if ((status .ne. 0) .or. (nrows .le. 0)) then
-      call err_exit_with_msg('Number of rows are strange: '//ladjusted_int(nrows)//' / status='//ladjusted_int(status))
+      call err_exit_with_msg('Number of rows are strange: '//trim(ladjusted_int(nrows))//' / status='//trim(ladjusted_int(status)))
       stop  ! redundant
     end if
 
@@ -1430,6 +1435,8 @@ if (IS_DEBUG()) print *,'DEBUG:245: out-sizes=',size(outchans, 1),' s2=',size(ou
     ! FTGCNO(unit,casesen,coltemplate, > colnum,status) ! FiT_Get_Column_from_Name_to_nO
     call FTGCNO(funit, .false., coltemplate, colnum, status)
 
+    ! Get the Array of Tstart
+    ! FTGCV[SBIJKEDCM](unit,colnum,frow,felem,nelements,nullval, > values,anyf,status) ! FiT_Get_Column_Value
     call FTGCVD(funit, colnum, 1, 1, nrows, nullvald, artime, anyf, status)
 
     ! Get summed channle data
@@ -1445,14 +1452,15 @@ if (IS_DEBUG()) print *,'DEBUG:369: iband=',iband,' sum=',sum(outchans(:,2,iband
   end subroutine asm_time_row_det_band
 
 
-  ! Read ASM fits and write QDP/PCO
+  ! Write QDP/PCO
   subroutine write_qdp(fname, outroot, chans, artime, outchans, status)
     implicit none
+    integer, parameter :: MY_FUNIT = 162  ! arbitrary
     real(dp8), parameter :: ys1 = 0.75, ys2 = 0.9+1/60.d0, yd1 = -(0.1+1/30.d0)  ! QDP Y-starting positions 1 and 2 and difference
     character(len=*), intent(in) :: fname, outroot  ! fname for ASM.fits
     integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band) ! for displaying purpose only
     real(dp8), dimension(:), intent(in) :: artime
-    integer, dimension(:,:,:), intent(in) :: outchans ! (Row(channel-values), Detector(6), Band(Low(1)/High(2)))
+    integer(kind=ip2), dimension(:,:,:), intent(in) :: outchans ! (Row(channel-values), Detector(6), Band(Low(1)/High(2)))
     integer, intent(out), optional :: status
     character(len=2048) :: qdpfile, pcofile
     integer :: iy, idet, irow, iband, statustmp
@@ -1471,7 +1479,11 @@ if (IS_DEBUG()) print *,'DEBUG:142: out-beg sum=',sum(outchans(:,2,1))
       end if
     end do
 
-    call FTGIOU(unit, status)
+    call FTGIOU(unit, status) ! Just get a safe IO unit
+    if ((status .ne. 0) .and. ((unit > 999) .or. (unit < 9))) then
+      write(stderr,'("WARNING: Failed in ftgiou(): unit = ",I12,". Manually reset to ",I3)') unit, MY_FUNIT
+      unit = MY_FUNIT
+    end if
 
 if (IS_DEBUG()) print *,'DEBUG:145: size1=',size(outchans,1),'sizes=',size(outchans, 2),' s3=',size(outchans, 3)
     ! QDP file
@@ -1534,14 +1546,14 @@ if (IS_DEBUG()) print *,'DEBUG:157: out-after sum=',sum(outchans(:,2,1))
     call FTFIOU(unit, statustmp)
   end subroutine write_qdp
 
-  ! Read ASM fits and write QDP/PCO
+  ! Read ASM fits and write QDP/PCO (Parent subroutine)
   subroutine read_asm_write_qdp(fname, outroot, chans) !, status)
     implicit none
     character(len=*), intent(in) :: fname, outroot  ! fname for ASM.fits
     integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band)
     integer :: status
     real(kind=dp8), dimension(:), allocatable :: artime
-    integer, dimension(:,:,:), allocatable :: outchans
+    integer(kind=ip2), dimension(:,:,:), allocatable :: outchans
 
 if (IS_DEBUG()) print *,'DEBUG:112: starting(sub)... chans=',chans, ' outroot=', trim(outroot)
     call asm_time_row_det_band(fname, chans, artime, outchans)
@@ -1554,102 +1566,102 @@ if (IS_DEBUG()) print *,'DEBUG:812: end.(sub)... chans=',chans, ' outroot=', tri
     if (allocated(outchans)) deallocate(outchans)
   end subroutine read_asm_write_qdp
 
-  ! Output FITS file of the ASM data
-  subroutine write_asm_fits(fname, fitshead, trows, frfrows, relrows, status)
-    implicit none
-    character(len=*), parameter :: Extname = 'ASM table'
-    character(len=*), parameter :: Subname = 'write_asm_fits'
-
-    character(len=*), intent(in) :: fname
-    type(fits_header), intent(in) :: fitshead  ! Mainly for 1st-Extension header
-    type(asm_telem_row), dimension(:), intent(in) :: trows
-    !type(asm_table_col), dimension(:, :), intent(in) :: tables ! (Row)
-    type(asm_frfrow), dimension(:), intent(in) :: frfrows
-    type(asm_sfrow), dimension(:), intent(in) :: relrows
-    integer, intent(out) :: status
-
-    integer :: unit, bitpix, naxis = 2
-    integer :: blocksize, naxes(2)
-    integer :: group,fpixel,nelements,array(300,200) ! i,j,
-    logical :: simple =.true., extend = .true.
-    integer :: nhdu
-    character(len=80), dimension(2) :: ttypes = (/ 'TIME', 'Char' /), tunits, &
-         tforms = (/ '1D ', '20A' /)  ! 20A20?
-         !tforms = (/ '1D   ', '20A20' /)  ! 20A20?
-         !tforms = (/ '1D   ', '1D   ' /)
-    real(kind=dp8), dimension(2) :: dvalues = (/ 12345.6, 7.89 /), d2values = (/ 0.023, 0.0045 /)
-    character(len=20), dimension(2) :: svalues = (/ 'saisho', 'tsugi1' /)
-    character(len=80) :: comment, keyword, snull, msg
-    character(len=30) :: errtext
-    type(t_asm_colhead), dimension(:), allocatable :: colheads
-
-    bitpix=16  ! signed 2-byte, -32: real, -64: double
-    naxis=2
-
-if (IS_DEBUG()) print *,'DEBUG:125:start-out'
-
-    ! Get an unused Logical Unit Number to use to create the FITS file
-    call ftgiou(unit, status)
-    if ((status .ne. 0) .and. ((unit > 999) .or. (unit < 9))) then
-      write(stderr,'("WARNING: Failed in ftgiou(): unit = ",I12,". Manually reset to 159.")') unit
-      unit = 159
-    end if
-
-if (IS_DEBUG()) print *,'DEBUG:140:aft-giou;unit=',unit, ' file=',trim(fname)
-
-    ! create the new empty FITS file blocksize=1
-call ftinit(unit, '!/tmp/out.fits', blocksize, status)
-    !call ftinit(unit, '!'//trim(fname), blocksize, status)
-if (IS_DEBUG()) print *,'DEBUG:142:b3ftart-out, status=',status
-    call warn_ftpcl_status(status, 'FTINIT', Subname)
-    if (status .ne. 0) call err_exit_with_msg('Is the output directory writable?')
-    call FTGHDN(unit, nhdu)  ! CHDU: Current HDU
-if (IS_DEBUG()) print *,'DEBUG:write-open1-status=',status,' / HDU=',nhdu,' / ',trim(errtext)
-    call ftphpr(unit,simple,bitpix,0,naxes,0,1,extend,status)
-    !call ftpkyj(unit,'EXPOSURE',1500,'Total Exposure Time',status)
-
-    call write_asm_fits_header(unit, fitshead, status, primary=.true.)
-
-    colheads = get_colheads()  ! Column Header info
-                               ! %(key, type, prm%(form, unit, comm, dim))
-
-    !!! Extension
-    
-    !ttypes = (/ 'TIME', 'String' /)
-    !tforms = (/ '1D', '20A' /)  ! Double
-    !tunits = (/ 'sec', '' /)
-    tunits(1) = 'sec'
-    tunits(2) = ''
-
-    !call FTIBIN(unit,nrows,tfields,ttype,tform,tunit,Extname,varidat > status) ! nrows should be 0 ! FiTs-Insert-BINary-table
-    call FTIBIN(unit, 0, size(ttypes) &
-              , ttypes, tforms, tunits, Extname, .true., status) ! Creates an extension with basic header and moves to it.
-    ! Status check...
-    call FTGHDN(unit, nhdu)
-    call FTGERR(status, errtext)
-    if (status .ne. 0) then
-      write(stderr,'("ERROR: Failed to create a table: status=",i4," / HDU=",i4,a)') status,nhdu,' / '//trim(errtext)
-    end if
-
-    call write_asm_fits_header(unit, fitshead, status)
-
-    ! Write Table (double precision)
-    !FTPCL[SLBIJKEDCM](unit,colnum,frow,felem,nelements,values, > status) ! frow: 1st row?, felem: 1st element?
-    call FTPCLD(unit,1,1,1,2,dvalues, status)  ! colnum = 1
-    call FTGHDN(unit, nhdu)
-    call FTGERR(status, errtext)
-if (IS_DEBUG()) print *,'DEBUG: dval-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
-    
-    call ftpkys(unit,'TDIM2','(20,1)','for Character in Binary table',status)
-    call FTPCLS(unit,2,1,1,2,svalues, status)  ! colnum = 2
-    !call FTPCLD(unit,2,1,1,2,d2values, status)
-    call FTGHDN(unit, nhdu)
-    call FTGERR(status, errtext)
-if (IS_DEBUG()) print *,'DEBUG: char-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)  ! If wrong, 309  / not an ASCII (A) column
-
-    call ftclos(unit, status)
-    call ftfiou(unit, status)
-  end subroutine write_asm_fits
+!  ! Output FITS file of the ASM data
+!  subroutine write_asm_fits(fname, fitshead, trows, frfrows, relrows, status)
+!    implicit none
+!    character(len=*), parameter :: Extname = 'ASM table'
+!    character(len=*), parameter :: Subname = 'write_asm_fits'
+!
+!    character(len=*), intent(in) :: fname
+!    type(fits_header), intent(in) :: fitshead  ! Mainly for 1st-Extension header
+!    type(asm_telem_row), dimension(:), intent(in) :: trows
+!    !type(asm_table_col), dimension(:, :), intent(in) :: tables ! (Row)
+!    type(asm_frfrow), dimension(:), intent(in) :: frfrows
+!    type(asm_sfrow), dimension(:), intent(in) :: relrows
+!    integer, intent(out) :: status
+!
+!    integer :: unit, bitpix, naxis = 2
+!    integer :: blocksize, naxes(2)
+!    integer :: group,fpixel,nelements,array(300,200) ! i,j,
+!    logical :: simple =.true., extend = .true.
+!    integer :: nhdu
+!    character(len=80), dimension(2) :: ttypes = (/ 'TIME', 'Char' /), tunits, &
+!         tforms = (/ '1D ', '20A' /)  ! 20A20?
+!         !tforms = (/ '1D   ', '20A20' /)  ! 20A20?
+!         !tforms = (/ '1D   ', '1D   ' /)
+!    real(kind=dp8), dimension(2) :: dvalues = (/ 12345.6, 7.89 /), d2values = (/ 0.023, 0.0045 /)
+!    character(len=20), dimension(2) :: svalues = (/ 'saisho', 'tsugi1' /)
+!    character(len=80) :: comment, keyword, snull, msg
+!    character(len=30) :: errtext
+!    type(t_asm_colhead), dimension(:), allocatable :: colheads
+!
+!    bitpix=16  ! signed 2-byte, -32: real, -64: double
+!    naxis=2
+!
+!if (IS_DEBUG()) print *,'DEBUG:125:start-out'
+!
+!    ! Get an unused Logical Unit Number to use to create the FITS file
+!    call ftgiou(unit, status)
+!    if ((status .ne. 0) .and. ((unit > 999) .or. (unit < 9))) then
+!      write(stderr,'("WARNING: Failed in ftgiou(): unit = ",I12,". Manually reset to 159.")') unit
+!      unit = 159
+!    end if
+!
+!if (IS_DEBUG()) print *,'DEBUG:140:aft-giou;unit=',unit, ' file=',trim(fname)
+!
+!    ! create the new empty FITS file blocksize=1
+!call ftinit(unit, '!/tmp/out.fits', blocksize, status)
+!    !call ftinit(unit, '!'//trim(fname), blocksize, status)
+!if (IS_DEBUG()) print *,'DEBUG:142:b3ftart-out, status=',status
+!    call warn_ftpcl_status(status, 'FTINIT', Subname)
+!    if (status .ne. 0) call err_exit_with_msg('Is the output directory writable?')
+!    call FTGHDN(unit, nhdu)  ! CHDU: Current HDU
+!if (IS_DEBUG()) print *,'DEBUG:write-open1-status=',status,' / HDU=',nhdu,' / ',trim(errtext)
+!    call ftphpr(unit,simple,bitpix,0,naxes,0,1,extend,status)
+!    !call ftpkyj(unit,'EXPOSURE',1500,'Total Exposure Time',status)
+!
+!    call write_asm_fits_header(unit, fitshead, status, primary=.true.)
+!
+!    colheads = get_colheads()  ! Column Header info
+!                               ! %(key, type, prm%(form, unit, comm, dim))
+!
+!    !!! Extension
+!    
+!    !ttypes = (/ 'TIME', 'String' /)
+!    !tforms = (/ '1D', '20A' /)  ! Double
+!    !tunits = (/ 'sec', '' /)
+!    tunits(1) = 'sec'
+!    tunits(2) = ''
+!
+!    !call FTIBIN(unit,nrows,tfields,ttype,tform,tunit,Extname,varidat > status) ! nrows should be 0 ! FiTs-Insert-BINary-table
+!    call FTIBIN(unit, 0, size(ttypes) &
+!              , ttypes, tforms, tunits, Extname, .true., status) ! Creates an extension with basic header and moves to it.
+!    ! Status check...
+!    call FTGHDN(unit, nhdu)
+!    call FTGERR(status, errtext)
+!    if (status .ne. 0) then
+!      write(stderr,'("ERROR: Failed to create a table: status=",i4," / HDU=",i4,a)') status,nhdu,' / '//trim(errtext)
+!    end if
+!
+!    call write_asm_fits_header(unit, fitshead, status)
+!
+!    ! Write Table (double precision)
+!    !FTPCL[SLBIJKEDCM](unit,colnum,frow,felem,nelements,values, > status) ! frow: 1st row?, felem: 1st element?
+!    call FTPCLD(unit,1,1,1,2,dvalues, status)  ! colnum = 1
+!    call FTGHDN(unit, nhdu)
+!    call FTGERR(status, errtext)
+!if (IS_DEBUG()) print *,'DEBUG: dval-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
+!    
+!    call ftpkys(unit,'TDIM2','(20,1)','for Character in Binary table',status)
+!    call FTPCLS(unit,2,1,1,2,svalues, status)  ! colnum = 2
+!    !call FTPCLD(unit,2,1,1,2,d2values, status)
+!    call FTGHDN(unit, nhdu)
+!    call FTGERR(status, errtext)
+!if (IS_DEBUG()) print *,'DEBUG: char-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)  ! If wrong, 309  / not an ASCII (A) column
+!
+!    call ftclos(unit, status)
+!    call ftfiou(unit, status)
+!  end subroutine write_asm_fits
 
 end module asm_fitsout
 
