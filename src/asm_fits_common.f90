@@ -38,15 +38,6 @@ module asm_fits_common
   character(len=max_fits_char), dimension(n_all_fields) :: &
      tmtypes, tmcomms, tmforms, tmunits
 
-  !character(len=max_fits_char), dimension(:, :), allocatable :: tmcolss  ! (i-th-column(1:n_all_fields), i-th-row)
-  !integer(kind=1),              dimension(:, :), allocatable :: tmcolsi
-  !integer,                      dimension(:, :), allocatable :: tmcolsj
-  !real(kind=dp),                dimension(:, :), allocatable :: tmcolsd
-  !character(len=max_fits_char), dimension(:),    allocatable :: outcolss ! (i-th-row)
-  !integer(kind=1),              dimension(:),    allocatable :: outcolsi
-  !integer,                      dimension(:),    allocatable :: outcolsj
-  !real(kind=dp),                dimension(:),    allocatable :: outcolsd
-
   integer, private :: i
 
   DATA tmtypes(1:2) / 'SF_NO2B', 'FRAME_NO' /
@@ -137,8 +128,12 @@ module asm_fits_common
     type(t_loc_fwb) :: DPID_OBS  = t_loc_fwb(f_multi=15, f_offset=16, word=TELEM_WORD_FROM0%dp, note='(DP)'); ! W66
     type(t_loc_fwb) :: MODE_ASM  = t_loc_fwb(f_multi=8,  f_offset=4,  word=TELEM_WORD_FROM0%dp,     bit=3, &
       note='(DP) (ON/OFF <=> 1/0)'); ! F8n+4 W66(=DP) B3: ASM Mode (ON/OFF <=> 1/0)
-    type(t_loc_fwb) :: MODE_SLEW = t_loc_fwb(f_multi=32, f_offset=10, word=TELEM_WORD_FROM0%status, bit=3, &
-      note='(Status)'); ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed)) ! Ref: Table 5.1.12, pp.209
+    type(t_loc_fwb) :: MODE_SLEW = t_loc_fwb(f_multi=32, f_offset=10, word=TELEM_WORD_FROM0%status, bit=4, &
+      note='(Status)'); ! F32n+10 W65(=Status) B4:  Slew360 Mode (Table 5.8 (5-16) in (unofficial final) Status word memo; ON=1, OFF=0) ! In Interim report Table 5.1.12, pp.209, it was B3!!
+    type(t_loc_fwb) :: MODE_SLEW_MINUS = t_loc_fwb(f_multi=32, f_offset=10, word=TELEM_WORD_FROM0%status, bit=5, &
+      note='(Status)'); ! F32n+10 W65(=Status) B5:  Slew360 Mode (Table 5.8 (5-16) in (unofficial final) Status word memo; ON=1, OFF=0)
+    type(t_loc_fwb) :: MODE_SLEW_PLUS  = t_loc_fwb(f_multi=32, f_offset=10, word=TELEM_WORD_FROM0%status, bit=6, &
+      note='(Status)'); ! F32n+10 W65(=Status) B6:  Slew360 Mode (Table 5.8 (5-16) in (unofficial final) Status word memo; ON=1, OFF=0)
     type(t_loc_fwb) :: MODE_PHA  = t_loc_fwb(f_multi=8,  f_offset=4,  word=TELEM_WORD_FROM0%dp,     bit=4, &
       note='(DP) (TIME/PHA <=> 1/0)'); ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
     type(t_loc_fwb) :: MODE_PHA_W56 = t_loc_fwb(f_multi=0, f_offset=56, word=TELEM_WORD_FROM0%dp,     bit=4, &
@@ -162,32 +157,6 @@ module asm_fits_common
       note='(DP)'); ! [/s] Telemetry bit rate (F16W66) ! Taken from Telemetry as opposed to FRF
   end type t_telem_loc
   type(t_telem_loc), parameter :: TELEM_LOC = t_telem_loc()
-  type(t_loc_fwb), dimension(7), parameter :: AR_TELEM_LOC = [ &
-       TELEM_LOC%MODE_OBS &
-     , TELEM_LOC%STAT_OBS &
-     , TELEM_LOC%DPID_OBS &
-     , TELEM_LOC%MODE_ASM &
-     , TELEM_LOC%MODE_SLEW&
-     , TELEM_LOC%MODE_PHA &
-     , TELEM_LOC%MODE_PHA_W56 &
-     ]
-
-  !! Ginga Telemetry BITs
-  !!
-  !! It starts from zero (0): B0-B7
-  !type t_telem_stat_bit_from0
-  !  integer :: asm_dp =  3; ! F8n+4 W66(=DP) B3: ASM Mode (ON/OFF <=> 1/0)
-  !  integer :: pha_time = 4; ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
-  !  integer :: slew   =  3; ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed)) ! Ref: Table 5.1.12, pp.209
-  !  integer :: asm_stat = 1; ! ON/OFF for ASM  ! (F32n+15, W65(Status)) Table 5.1.12, pp.213
-  !  integer :: asa      = 2; ! ON/OFF for ASM-A    F15W65B2
-  !  integer :: amc      = 3; ! ON/OFF for ASM-AMC  F15W65B3
-  !  integer :: hv1      = 4; ! ENA/DIS for ASM-HV1 F15W65B4
-  !  integer :: hv2      = 5; ! ENA/DIS for ASM-HV2 F15W65B5
-  !  integer :: rbm      = 6; ! ENA/DIS for ASM-RBM F15W65B6
-  !  integer :: bdr      = 7; ! ENA/DIS for ASM-BDR F15W65B7
-  !end type t_telem_stat_bit_from0
-  !type(t_telem_stat_bit_from0), parameter :: TELEM_BIT_FROM0 = t_telem_stat_bit_from0()
 
   ! ASM Table as read from a Telemetry file; row-based, ie., each row constitutes 1 variable
   !
@@ -308,12 +277,12 @@ module asm_fits_common
     real(dp8), dimension(2, 4) :: coords_magnet = UNDEF_REAL ! [J=14-15] ALPHA,DELTA OF THE MAGNETIC FIELD [deg]
     real(dp8), dimension(2, 4) :: coords_sun = UNDEF_REAL    ! [J=16-17] ALPHA,DELTA OF THE SUN [deg]
     !---- Up To here, Contents of RBUFF 
-    real(dp8), dimension(4) :: sunps = UNDEF_INT  ! PRESENCE OF SUNSHINE, 1/0=YES/NO
+    integer(kind=ip4), dimension(4) :: sunps = UNDEF_INT  ! PRESENCE OF SUNSHINE, 1/0=YES/NO
     real(dp8), dimension(4) :: elvys = UNDEF_REAL  ! ELEVATION OF YAXIS FROM THE EARTH EDGE [deg]
-    real(dp8), dimension(4) :: eflags = UNDEF_INT ! CONDITION OF THE EARTH OCCULTATION
+    integer(kind=ip4), dimension(4) :: eflags = UNDEF_INT ! CONDITION OF THE EARTH OCCULTATION
                    ! 0: NOT OCCULTED, 1: OCCULTED BY THE DARK EARTH
                    ! 2: OCCULTED BY SUN SHONE EARTH
-    real(dp8) :: nsampl = UNDEF_INT ! NUMBER OF THE ORBIT AND ATTITUDE DATA
+    integer(kind=ip4) :: nsampl = UNDEF_INT ! NUMBER OF THE ORBIT AND ATTITUDE DATA
                        ! NSAMPL=1 FOR BITRATE H,M ,  =4 FOR BITRATE L
   end type asm_frfrow
 
@@ -362,7 +331,9 @@ module asm_fits_common
        !integer(ip4) :: lostf   = UNDEF_INT; ! number of LOST Frames (wrong "SYNC")
     integer(ip4) :: sfntelem  = UNDEF_INT; ! (guessed) SF Number based on the telemetry alone
     integer(ip4) :: mode_asm  = UNDEF_INT; ! F8n+4 W66(=DP) B3: ASM Mode (ON/OFF <=> 1/0)
-    integer(ip4) :: mode_slew = UNDEF_INT; ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed)) ! Ref: Table 5.1.12, pp.209
+    integer(ip4) :: mode_slew = UNDEF_INT;  ! F32n+10 W65(=Status) B4: Slew360   Mode (ON/OFF <=> 1/0)
+    integer(ip4) :: mode_slem = UNDEF_INT; ! F32n+10 W65(=Status) B5: SlewMinus Mode (ON/OFF <=> 1/0)
+    integer(ip4) :: mode_slep = UNDEF_INT; ! F32n+10 W65(=Status) B6: SlewPlus  Mode (ON/OFF <=> 1/0)
     integer(ip4) :: mode_PHA  = UNDEF_INT; ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
     integer(ip4) :: mode_PHA_W56 = UNDEF_INT; ! F56W66B4  (should be identical to mode_PHA (=F8n+4, W66B4)
     !integer(ip4) :: mode_real_stored = UNDEF_INT;
@@ -439,7 +410,7 @@ module asm_fits_common
                         ! i.e., Euler1, Euler2, Euler3 must be in a different variable.
                         ! n.b., for ACS_C, though it is an array, the corresponding TTYPE is only 1, hence dim=1
   end type t_form_unit
-  type(t_form_unit), dimension(19), parameter :: COL_FORM_UNITS = [ &
+  type(t_form_unit), dimension(21), parameter :: COL_FORM_UNITS = [ &
      ! note: I=Int*2, J=Int*4, D=Real*8
        t_form_unit(key='main',     root='',        form='1I', unit='count', comm='Main ASM data', dim=NWORDS_MAIN) & ! Special case: root should be explicitly specified when used. See function get_colheads()
      , t_form_unit(key='Tstart',   root='Tstart',  form='1D', unit='day', comm='Start datetime in MJD') &
@@ -452,11 +423,12 @@ module asm_fits_common
      , t_form_unit(key='Mode_ASM', root='Mode_ASM', form='1I', comm='F4W66B3 ASM Mode (ON/OFF <=> 1/0)') & ! F8n+4 W66(=DP) B3:  ASM Mode (ON/OFF <=> 1/0)
      , t_form_unit(key='Mode_PHA', root='Mode_PHA', form='1I', comm='F4W66B4 ASM(TIME/PHA <=> 1/0)') & ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
        !   Note: The same is found at F56W66B4 (but it is ignored in this code).
-     , t_form_unit(key='ModeSlew', root='ModeSlew', form='1I', comm='F10W65B3 ASM Slew360') & ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed))
+     , t_form_unit(key='ModeSlew', root='ModeSlew', form='1I', comm='F10W65B4 ASM Slew360')   & ! F32n+10 W65(=Status) B4:  Slew360   Mode (ON/OFF <=> 1/0)
+     , t_form_unit(key='ModeSleM', root='ModeSleM', form='1I', comm='F10W65B5 ASM SlewMinus') & ! F32n+10 W65(=Status) B5:  SlewMinus Mode (ON/OFF <=> 1/0)
+     , t_form_unit(key='ModeSleP', root='ModeSleP', form='1I', comm='F10W65B6 ASM SlewPlus')  & ! F32n+10 W65(=Status) B6:  SlewPlus  Mode (ON/OFF <=> 1/0)
      , t_form_unit(key='Status_C', root='Status_C',form='1I', comm='STATUS (W65) in every Frame') &
      , t_form_unit(key='Status_S', root='Status_S',form='8A', comm='STATUS (W65-8bit) in every Frame') &
-       ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed))
-       !   Ref1: Table 5.1.12, pp.209
+       ! F32n+10 W65(=Status) B4:  Slew360 Mode (ON/OFF <=> 1/0)  Ref1: Unofficial final specification
      , t_form_unit(key='DP_C',     root='DP_C',    form='1I', comm='DP (W66) in every Frame') &
      , t_form_unit(key='DP_S',     root='DP_S',    form='8A', comm='DP (W66-8bit) in every Frame') &
        ! F8n+4 W66(=DP) B3:  ASM Mode (ON/OFF <=> 1/0)
@@ -998,66 +970,6 @@ contains
     iret = iret + add1
   end function w_no
 
-  ! Returns the frame, word, and bit numbers in Telemetry (128-words)
-  ! for the given item
-  !
-  ! In default frame and word count from 0 (zero), namely F0 to F63 and W0 to W127,
-  ! unless optional argument from1 is given and .true.,
-  ! in which case it starts from 1 like a Fortran Array.
-  ! Bit is always counted from 0 (like Fortran btest(i,pos)).
-  !
-  ! name is (fi|dp|status|pi_mon), so far, and in lower-cases ONLY.
-  !
-  ! If undefined, negative values for word and bit are returned (frame number is 0 or 1).
-  function frame_word_first(name, from1) result(ret)
-    character(len=*), intent(in) :: name
-    logical, intent(in), optional :: from1
-    type(t_frame_word_bit) :: ret
-    
-    logical :: fr1
-    integer :: iframe, iword, ibit
-    integer :: add1
-
-    if (present(from1) .and. from1) then
-      add1 = 1
-      fr1 = .true.
-    else
-      add1 = 0
-      fr1 = .false.
-    end if
-
-    iframe = 0  ! Default (basically, any frame)
-    iword = UNDEF_INT
-    ibit  = UNDEF_INT
-    if (     trim(name) == 'fi') then
-      iword = w_no('fi', fr1)
-    else if (trim(name) == 'dp') then
-      iword = w_no('dp', fr1)
-    else if (trim(name) == 'status') then
-      iword = w_no('status', fr1)
-    else if (trim(name) == 'pi_mon') then
-      iword = w_no('pi_mon', fr1)
-    !-----------
-    else if (trim(name) == 'slew360') then ! F32n+10 W65(=Status) B3;  (is ON "1"? (unconfirmed))
-      iframe = 10
-      iword  = w_no('status', fr1)
-      ibit   = 3
-    else if (trim(name) == 'asm') then      ! F8n+4 W66(=DP) B3: ASM Mode (ON/OFF <=> 1/0)
-      iframe = 4
-      iword  = w_no('dp', fr1)
-      ibit   = 3
-    else if (trim(name) == 'time_pha') then ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
-      iframe = 4
-      iword  = w_no('dp', fr1)
-      ibit   = 4
-    end if
-
-    iframe = iframe + add1
-    iword  = iword  + add1
-
-    ret = t_frame_word_bit(frame=iframe, word=iword, bit=ibit) 
-  end function frame_word_first
-
   ! Returns MJD of starting epoch of the first frame of a SF, based on sfrow/relrow
   real(kind=dp8) function sfrow2mjd(sfrow, trows) result(retmjd)
     type(asm_sfrow), intent(in) :: sfrow
@@ -1150,7 +1062,7 @@ contains
     ! real(dp), dimension(2, 4) :: coords_sun ! [J=16-17] ALPHA,DELTA OF THE SUN
     print *, 'sunps   =', row%sunps(i), '/PRESENCE OF SUNSHINE, 1/0=YES/NO'
     ! real(dp), dimension(4) :: elvys  ! ELEVATION OF YAXIS FROM THE EARTH EDGE                  
-    ! real(dp), dimension(4) :: eflags ! CONDITION OF THE EARTH OCCULTATION                      
+    ! integer(kind=ip4), dimension(4) :: eflags  ! CONDITION OF THE EARTH OCCULTATION
   end subroutine dump_asm_frfrow
 
 
@@ -1279,29 +1191,6 @@ contains
     itel = (irow16-1)*16 + 4 + 1
     iasm = (irow16-1)*12 + 1
   end subroutine calc_rows_asmdats_telem
-
-
-  ! Table5.5.5-6 (pp.233-234)
-  function get_asmmain_row(acard) result(arret)
-    implicit none
-    integer(kind=1), dimension(NBYTESPERCARD), intent(in) :: acard ! == telems(1:128, i) ! Name: "a card"
-    integer, dimension(NWORDS_MAIN) :: arret
-
-    integer :: idet, ich, i_tele, i_out
-
-    arret = 0
-    do idet=1, NUM_INSTR  ! =6
-      do ich=1, NCHANS_TIME  ! =8
-        !i_tele = (idet-1)*2 + (ich-1)*16 + 5
-        !i_out = (idet-1)*NCHANS_PHA + ich
-        !arret(i_fr64) = telems(i_tele, itotrow)
-        !    
-        !i_tele = (idet-1)*2 + (ich-1)*16 + 6
-        !i_out = (idet-1)*NCHANS_PHA + ich + 8
-        !arret(i_fr64) = telems(i_tele, itotrow)
-      end do
-    end do
-  end function get_asmmain_row
 
 
   ! Gets the corresponding row number of asm_telem_row%asmdats (see get_telem_raws2types() in asm_read_telemetry)

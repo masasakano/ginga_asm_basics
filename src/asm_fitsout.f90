@@ -366,7 +366,13 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     sfrow%mode_asm  = get_val_frb(TELEM_LOC%MODE_ASM,  trows, sfrow) ! F8n+4 W66(=DP) B3: ASM Mode (ON/OFF <=> 1/0)
     
     ! MODE_SLEW
-    sfrow%mode_slew = get_val_frb(TELEM_LOC%MODE_SLEW, trows, sfrow) ! F32n+10 W65(=Status) B3:  Slew369 Mode (is ON "1"? (unconfirmed)) ! Ref: Table 5.1.12, pp.209
+    sfrow%mode_slew = get_val_frb(TELEM_LOC%MODE_SLEW, trows, sfrow) ! F32n+10 W65(=Status) B4:  Slew360 Mode (ON/OFF <=> 1/0) ! Ref: Unofficial final specification
+    
+    ! MODE_SLEW_MINUS
+    sfrow%mode_slem = get_val_frb(TELEM_LOC%MODE_SLEW_MINUS, trows, sfrow) ! F32n+10 W65(=Status) B5:  SlewMinus Mode (ON/OFF <=> 1/0) ! Ref: Unofficial final specification
+    
+    ! MODE_SLEW_PLUS
+    sfrow%mode_slep = get_val_frb(TELEM_LOC%MODE_SLEW_PLUS,  trows, sfrow) ! F32n+10 W65(=Status) B6:  SlewPlus Mode (ON/OFF <=> 1/0) ! Ref: Unofficial final specification
     
     ! MODE_PHA
     sfrow%mode_PHA  = get_val_frb(TELEM_LOC%MODE_PHA,  trows, sfrow) ! F8n+4 W66(=DP) B4: ASM-PHA/Time Mode (TIME/PHA <=> 1/0)
@@ -659,16 +665,9 @@ if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
 
     rethead%TSTARTMS%val = sfrow2mjd(relrows(ilocs(1)), trows)  ! defined in asm_fits_common
     ilocs = findloc(relrows%mode_slew, 1, MASK=relrows%is_valid, BACK=.true.)
-    rethead%TENDMS%val   = sfrow2mjd(relrows(ilocs(1)), trows) + mjd_interval ! The end time of the last valid ASM-Mode Frame
+    rethead%TENDMS%val   = sfrow2mjd(relrows(ilocs(1)), trows) + mjd_interval ! The end time of the last valid Slew360-Mode Frame
   end function get_asm_fits_header
 
-
-  !function get_fitshead(trows, sfrow) result(fitshead)
-  !  type(asm_telem_row), dimension(:), intent(in) :: trows
-  !  type(asm_sfrow), intent(in) :: sfrow
-  !  type(fits_header), dimension(2) :: fitshead  ! (ExtensionNo), primary is 1
-
-  !end function get_fitshead
 
   ! Output FITS header in a HDU of the ASM data FITS file
   subroutine write_asm_fits_header(unit, fhd, status, comname, args, primary)
@@ -827,6 +826,7 @@ if (IS_DEBUG()) print *,'DEBUG:042:b3ftart-out, status=',status
   ! Output FITS file of the ASM data
   subroutine write_cols(unit, trows, relrows, colheads, status)
     implicit none
+    character(len=*), parameter :: Subname = 'write_cols'
     integer, intent(in) :: unit
     type(asm_telem_row), dimension(:), intent(in) :: trows
     !type(asm_frfrow), dimension(:), intent(in) :: frfrows
@@ -1022,7 +1022,7 @@ if (IS_DEBUG()) print *,'DEBUG:364:sfn',iprm,'=',colj(63:65)
         end do
 if (IS_DEBUG()) call dump_type(relrows(5))
 
-      case('SF2bits', 'Mode_ASM', 'Mode_PHA', 'ModeSlew', 'bitrate')  ! 'Fr6bits', 'i_frame', are Frame-based 
+      case('SF2bits', 'Mode_ASM', 'Mode_PHA', 'ModeSlew', 'ModeSleM', 'ModeSleP', 'bitrate')  ! 'Fr6bits', 'i_frame', are Frame-based 
         ! Integer*2 columns
         do iprm=1, 1
           coli(:) = 0
@@ -1048,6 +1048,10 @@ if (IS_DEBUG()) call dump_type(relrows(5))
               coli(iout:iend) = relrows(irelrow)%mode_PHA 
             case('ModeSlew')
               coli(iout:iend) = relrows(irelrow)%mode_slew
+            case('ModeSleM')
+              coli(iout:iend) = relrows(irelrow)%mode_slem
+            case('ModeSleP')
+              coli(iout:iend) = relrows(irelrow)%mode_slep
             case('bitrate')
               coli(iout:iend) = relrows(irelrow)%bitrate
             case default
@@ -1171,7 +1175,7 @@ if (IS_DEBUG()) call dump_type(relrows(5))
         call modify_ttype_comment(unit, ittype, ckey, status)
 
       case default
-        call err_exit_with_msg('Parameter '//trim(ckey)//' is not yet taken into account.')
+        call err_exit_with_msg('('//Subname//') Parameter '//trim(ckey)//' is not yet taken into account.')
       end select
     end do
     if (allocated(coli)) deallocate(coli)
