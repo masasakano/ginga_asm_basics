@@ -1353,6 +1353,7 @@ if (IS_DEBUG()) print *,'DEBUG: test-close-status=',status,' / ',trim(errtext)
     integer(kind=ip2) :: nullval
     logical :: anyf
     integer :: status, colnum, ich, idet
+    integer(kind=ip2) :: statusi2
     character(len=30) :: errtext
 
     nullval = -999
@@ -1365,11 +1366,29 @@ if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:261: colnum=',colnum,' nrows=',
         tmpchs = 0_ip2
         ! FiTs_GeT_Column_Value: FTGCV[SBIJKEDCM](unit,colnum,frow,felem,nelements,nullval, >values,anyf,status)
         !  anyf is True if any of the values is undefined.
-        call FTGCVI(funit, colnum, 1, 1, nrows, UNDEF_INT2, tmpchs, anyf, status)
+        call FTGCVI(funit, colnum, 1, 1, nrows, 0, tmpchs, anyf, status)
+        !call FTGCVI(funit, colnum, 1, 1, nrows, UNDEF_INT2, tmpchs, anyf, status)
+!if (.true.) then
         if (status .ne. 0) then
           call FTGERR(status, errtext)
           write(stderr,'("ERROR: (",A,") Failed in FTGCVI() with Status=",A," (",A,"): colnum=",A)') &
              Subname, trim(ladjusted_int(status)), trim(errtext), trim(ladjusted_int(colnum))
+
+!          call FTGCVI(funit, colnum, 1, 1, nrows, 0, tmpchs, anyf, status)
+!          if (status .ne. 0) then
+!            call FTGERR(int(status), errtext)
+!            write(stderr,'("ERROR: (",A,") Failed(2) in FTGCVI() with Status=",A," (",A,"): colnum=",A)') &
+!               Subname, trim(ladjusted_int(int(status))), trim(errtext), trim(ladjusted_int(colnum))
+
+          !! ------------ Comment ------------
+          !! Rerun FTGCVI() with INTEGER*2 status, and it may work if GINGA_DEBUG=1
+          !! There is no reason this works, when the others do not, but it seems to do so!
+          call FTGCVI(funit, colnum, 1, 1, nrows, 0, tmpchs, anyf, statusi2)
+          if (statusi2 .ne. 0) then
+            call FTGERR(int(statusi2), errtext)
+            write(stderr,'("ERROR: (",A,") Failed(2) in FTGCVI() with Status=",A," (",A,"): colnum=",A)') &
+               Subname, trim(ladjusted_int(int(statusi2))), trim(errtext), trim(ladjusted_int(colnum))
+          end if
         else
           write(stderr,'("NOTE: Success in FTGCVI()")')
           if (anyf) write(stderr,'("ERROR: (",A,") anyf is TRUE: colnum=",A)') &
@@ -1468,9 +1487,15 @@ if (IS_DEBUG()) print *,'DEBUG:245: out-sizes=',size(outchans, 1),' s2=',size(ou
     !  stop  ! redundant
     !end if
 
+    ! Get summed channle data
+    do iband=1, size(chans, 2)
+      outchans(:,:,iband) = get_asm_summed_chan(funit, chans(:, iband), nrows)
+if (IS_DEBUG()) print *,'DEBUG:369: iband=',iband,' sum=',sum(outchans(:,2,iband))
+    end do
+
     ! Get Tstart (Time column)
     tmpfu = get_element('Tstart', COL_FORM_UNITS)
-    coltemplate = trim(tmpfu %root)
+    coltemplate = trim(tmpfu%root)
 
     ! Get column number for Tstart (should be 97)
     ! FTGCNO(unit,casesen,coltemplate, > colnum,status) ! FiT_Get_Column_from_Name_to_nO
@@ -1479,12 +1504,6 @@ if (IS_DEBUG()) print *,'DEBUG:245: out-sizes=',size(outchans, 1),' s2=',size(ou
     ! Get the Array of Tstart
     ! FTGCV[SBIJKEDCM](unit,colnum,frow,felem,nelements,nullval, > values,anyf,status) ! FiT_Get_Column_Value
     call FTGCVD(funit, colnum, 1, 1, nrows, UNDEF_DOUBLE, artime, anyf, status)
-
-    ! Get summed channle data
-    do iband=1, size(chans, 2)
-      outchans(:,:,iband) = get_asm_summed_chan(funit, chans(:, iband), nrows)
-if (IS_DEBUG()) print *,'DEBUG:369: iband=',iband,' sum=',sum(outchans(:,2,iband))
-    end do
 
     call FTCLOS(funit, status)
     call err_exit_if_status(status, 'Failed to close the FITS: '//trim(fname))
