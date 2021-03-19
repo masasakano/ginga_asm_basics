@@ -87,13 +87,14 @@ contains
 
   ! Returns FRF FITS-header object
   function get_frf_head(fname) result(frfhead)
+    integer, parameter :: MY_FUNIT = 157  ! arbitrary
     character(*), intent(in) :: fname  ! FRF filename
     type(fits_header) :: frfhead
 
     integer :: funit, status=-999, blocksize, hdutype
     integer :: nrows = -99
 
-    funit = get_safe_unit(defunit=157)
+    funit = get_safe_unit(defunit=MY_FUNIT)
 
     ! Open and move to the 1st extension
     call ftopen(funit, fname, 0, blocksize, status)  ! 0: readonly
@@ -138,6 +139,7 @@ contains
   !   Use fort_util::unsigned1_to_int4() to convert it (scalar or Array)
   !   into a standard Integer(kind=4) (scalar/Array).
   subroutine read_telemetry(fname, fhead, headers, telems)
+    integer, parameter :: MY_FUNIT = 156  ! arbitrary
     character(*), intent(in) :: fname  ! Telemetry filename
     type(fits_header), intent(out) :: fhead
     integer(kind=1), dimension(:, :), allocatable, intent(out) :: headers, telems ! (word(=byte), row)
@@ -152,7 +154,7 @@ contains
     character(len=80) :: comment, snull, msg
     integer :: i, j, nc
 
-    funit = get_safe_unit(defunit=156)
+    funit = get_safe_unit(defunit=MY_FUNIT)
 
     ! Open and move to the 1st extension
     call ftopen(funit, fname, 0, blocksize, status)  ! 0: readonly
@@ -420,6 +422,7 @@ end if
   !
   ! Description:
   function get_frf_types(fname) result(frfrows)
+    integer, parameter :: MY_FUNIT = 151  ! arbitrary
     character(len=*), intent(in) :: fname  ! Telemetry filename
     type(asm_frfrow), dimension(:), allocatable :: frfrows
 
@@ -442,7 +445,7 @@ end if
     real(kind=dp8) :: RBUFFS(17,4), ELVYS(4)
     !DOUBLE PRECISION    MJD,MJDS(4)
 
-    funit = get_safe_unit(156)
+    funit = get_safe_unit(MY_FUNIT)
 
     call OPNFRF(funit, fname, cond)
     ! FiTs_Get_Number_of_RoWs

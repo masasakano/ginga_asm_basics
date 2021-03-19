@@ -248,6 +248,7 @@ contains
       return
     end do
     call print_teststats(subname, TOT_NTESTS)
+    if (allocated(colheads))  deallocate(colheads)
     if (allocated(colheads2)) deallocate(colheads2)
   end function run_test_get_colheads
 
@@ -370,6 +371,7 @@ contains
     end do
     call print_teststats(subname, TOT_NTESTS)
 !print *,'DEBUG:714:test-sucx:'
+    if (allocated(colheads))  deallocate(colheads)
   end function run_test_common_misc
 end module test_fits_common
 
@@ -627,6 +629,7 @@ call dump_asm_telem_row(telm_rows(SF2F15)) ! =79(F15) for DEBUG
       , assert_equal(   3,       frfrows(2)%sfn,         subname, 'for SFN for i=2') &
       , assert_in_delta(3.23861_dp, frfrows(2)%eulers(1,1), 0.0001_dp, subname, 'for Euler1 for i=2') &
       ]
+    if (allocated(frfrows)) deallocate(frfrows)
 
     do j=1, TOT_NTESTS
       ! write(optmsg, '("for get_ttype(i=", i2, ")")') expecteds(j)%i
@@ -829,6 +832,7 @@ print *,'DEBUG:888:end writing'
 
     deallocate(headers)
     deallocate(telems)
+    deallocate(trows)
     deallocate(frfrows)
     deallocate(relrows0)
     deallocate(relrows)

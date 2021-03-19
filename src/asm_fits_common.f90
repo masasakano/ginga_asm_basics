@@ -25,8 +25,10 @@ module asm_fits_common
   integer, parameter :: LEN_T_INVALID_FMT_KEY = 32
   integer, parameter :: LEN_PROC_STATS = 256
   integer, parameter :: LEN_T_ARGV = 1024
-  real(dp8),    parameter :: UNDEF_REAL = -1024.0d0
-  integer(ip4), parameter :: UNDEF_INT  = -999
+  real(dp8),    parameter :: UNDEF_DOUBLE = -1024.0_dp8
+  real(dp8),    parameter :: UNDEF_REAL   = -1024.0_dp8  ! for backward compatibility (though the name suggests it to be for the standard REAL)
+  integer(ip4), parameter :: UNDEF_INT  = -999_ip4
+  integer(ip2), parameter :: UNDEF_INT2 = -999_ip2
   character(len=*), parameter :: OUTFTCOMMENT1 = 'Created by combining a Ginga telemetry file&
      & and corresponding FRF for the LAC.  However, the LAC FRFs usually lack the data in which&
      & the ASM-Mode is on.  Therefore, no meaningful Euler angles appear in the Table&
@@ -1661,12 +1663,12 @@ if (ittype > nsiz) call err_exit_play_safe()
 
   ! Returns true if the environmental variable DEBUG is set and NOT 'false' or 'no'.
   logical function IS_DEBUG() result(ret)
-    character(len=255) :: env_debug
+    character(len=1024) :: env_debug
     integer :: status
     integer, save :: prev_result = -99
 
     ! To avoid repeatedly accessing the system to get the environmental variable.
-    if (prev_result < 0) then  ! This IF-statment is redundant (but is left for readability).
+    if (prev_result .ge. 0) then  ! This IF-statment is redundant (but is left for readability).
       select case(prev_result)
       case(0)
         ret = .false.

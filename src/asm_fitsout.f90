@@ -793,6 +793,7 @@ if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
   ! Test output for debugging.
   subroutine write_tmp_fits(fname, status)
     implicit none
+    integer, parameter :: MY_FUNIT = 160  ! arbitrary
     character(len=*), intent(in) :: fname
     integer, intent(out) :: status
     integer :: unit, bitpix, naxis = 0
@@ -803,7 +804,7 @@ if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
     character(len=30) :: errtext
     call ftgiou(unit, status)
 if (IS_DEBUG()) print *,'DEBUG:041:giou, unit=', unit, ' status=',status
-if ((status .ne. 0) .and. ((unit > 999) .or. (unit < 9))) unit = 160
+if ((status .ne. 0) .and. ((unit > 999) .or. (unit < 9))) unit = MY_FUNIT
 call ftinit(unit, '/tmp/out.fits', blocksize, status)
 if (IS_DEBUG()) print *,'DEBUG:042:b3ftart-out, status=',status
     call ftclos(unit, status)
@@ -1342,6 +1343,8 @@ if (IS_DEBUG()) print *,'DEBUG: test-close-status=',status,' / ',trim(errtext)
 
   ! Read multiple channels from FITS and returns a (Integer*2) 2-dim Array (value, detector) for the summed data
   function get_asm_summed_chan(funit, chan_l_h, nrows) result(retchans)
+    implicit none
+    character(len=*), parameter :: Subname = 'get_asm_summed_chan'
     integer, intent(in) :: funit, nrows
     integer, dimension(2), intent(in) :: chan_l_h ! Low and high channels to sum
     integer(kind=ip2), dimension(nrows, NUM_INSTR) :: retchans  ! NUM_INSTR defined in asm_fits_common
@@ -1350,46 +1353,78 @@ if (IS_DEBUG()) print *,'DEBUG: test-close-status=',status,' / ',trim(errtext)
     integer(kind=ip2) :: nullval
     logical :: anyf
     integer :: status, colnum, ich, idet
+    character(len=30) :: errtext
 
+    nullval = -999
 if (IS_DEBUG()) print *,'DEBUG:259: nrows=',nrows,' chan_l_h=',chan_l_h
     do idet=1, NUM_INSTR
-      retchans(:, idet) = 0 
+      retchans(:, idet) = 0_ip2 
       do ich=chan_l_h(1), chan_l_h(2)
         colnum = (idet-1)*NCHANS_PHA + ich + 1   ! NCHANS_PHA defined in asm_fits_common
-if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:261: colnum=',colnum
+if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:261: colnum=',colnum,' nrows=',nrows
+        tmpchs = 0_ip2
         ! FiTs_GeT_Column_Value: FTGCV[SBIJKEDCM](unit,colnum,frow,felem,nelements,nullval, >values,anyf,status)
         !  anyf is True if any of the values is undefined.
-        call FTGCVI(funit, colnum, 1, 1, nrows, nullval, tmpchs, anyf, status)
+        call FTGCVI(funit, colnum, 1, 1, nrows, UNDEF_INT2, tmpchs, anyf, status)
+        if (status .ne. 0) then
+          call FTGERR(status, errtext)
+          write(stderr,'("ERROR: (",A,") Failed in FTGCVI() with Status=",A," (",A,"): colnum=",A)') &
+             Subname, trim(ladjusted_int(status)), trim(errtext), trim(ladjusted_int(colnum))
+        else
+          write(stderr,'("NOTE: Success in FTGCVI()")')
+          if (anyf) write(stderr,'("ERROR: (",A,") anyf is TRUE: colnum=",A)') &
+             Subname, trim(ladjusted_int(colnum))
+        end if
+
         retchans(:, idet) = retchans(:, idet) + tmpchs
       end do
-if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:268: sum=',sum(retchans(:, idet))
-if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:269: 110=',retchans(110, idet)
+if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:268: sum=',sum(retchans(:, idet)),' for idet=',trim(ladjusted_int(idet))
+if (IS_DEBUG() .and. (idet == 5)) print *,'DEBUG:269:  87(det=5)=',retchans( 87, idet)
+if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:269: 110(det=2)=',retchans(110, idet)
     end do
-if (IS_DEBUG())                   print *,'DEBUG:270: 110=',retchans(110, 2)
+if (IS_DEBUG())                   print *,'DEBUG:270:  87=',retchans(87, :)
+if (IS_DEBUG())                   print *,'DEBUG:270: 110=',retchans(110, :)
   end function get_asm_summed_chan
 
   ! Read ASM fits and returns required Arrays to output.
   subroutine asm_time_row_det_band(fname, chans, artime, outchans)
     implicit none
+    character(len=*), parameter :: Subname = 'asm_time_row_det_band'
     integer, parameter :: MY_FUNIT = 161  ! arbitrary
     character(len=*), intent(in) :: fname  ! fname for ASM.fits
     integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band)
     real(kind=dp8), dimension(:), allocatable, intent(out) :: artime
     integer(kind=ip2), dimension(:,:,:), allocatable, intent(out) :: outchans ! (Row(channel-values), Detector, Band(Low(1)/High(2)))
-    real(kind=dp8) :: nullvald
     integer :: funit, blocksize, hdutype, status=-999, colnum
     integer :: nrows, iband
     logical :: existdat, anyf
     character(len=1024) :: comment
+    character(len=30) :: errtext
     character(len=MAX_FITS_CHAR) :: coltemplate
     type(t_form_unit) :: tmpfu
+    logical :: success_ftgiou
 
+write(stderr,'("")', advance='no')
+    success_ftgiou = .true.
     call FTGIOU(funit, status)
-    if ((status .ne. 0) .and. ((funit > 999) .or. (funit < 9))) then
-      write(stderr,'("WARNING: Failed in ftgiou(): unit = ",I12,". Manually reset to ",I3)') funit, MY_FUNIT
-      funit = MY_FUNIT
+if (IS_DEBUG()) write(stderr,'("(",A,") UNIT= ",A)') Subname, trim(ladjusted_int(funit))
+    if (status .ne. 0) then
+      call FTGERR(status, errtext)
+      write(stderr,'("WARNING: (",A,") Failed in ftgiou(): status= ",A," (",A,")")', advance='no') &
+         Subname, trim(ladjusted_int(status)), trim(errtext)
+      if ((funit > 999) .or. (funit < 9)) then
+        write(stderr,'(": unit = ",I12,". Manually reset to ",I3)') funit, MY_FUNIT
+        funit = MY_FUNIT
+        success_ftgiou = .false.
+      else
+        !write(stderr,'(": unit = ",I12,", which is used nonetheless.")') funit
+        write(stderr,'(": unit = ",I12,", which is reset to ",I3)') funit, MY_FUNIT
+        funit = MY_FUNIT
+        success_ftgiou = .false.
+      end if
     end if
-    call FTOPEN(funit, fname, 0, blocksize, status)  ! 0: readonly
+!funit = MY_FUNIT  ! DEBUG
+    call FTOPEN(funit, trim(fname), 0, blocksize, status)  ! 0: readonly
     !call FTOPEN(funit, trim(fname), 0, blocksize, status)  ! 0: readonly
     !call ftopen(funit, fname, 0, blocksize, status)  ! 0: readonly
     call err_exit_if_status(status, 'Failed to open the FITS to read: '//trim(fname))
@@ -1414,6 +1449,8 @@ if (IS_DEBUG())                   print *,'DEBUG:270: 110=',retchans(110, 2)
     allocate(outchans(nrows, NUM_INSTR, size(chans, 2))) ! (Row, Detector, Band)
     allocate(artime(nrows)) ! for Tstart
 if (IS_DEBUG()) print *,'DEBUG:245: out-sizes=',size(outchans, 1),' s2=',size(outchans, 2),' s3=',size(outchans, 3)
+    outchans = -99
+    !artime = 0.0d0
 
     !! FiTs_Get_Number_of_CoLumns
     !call FTGNCL(funit, nc, status) ! read TFIELDS
@@ -1441,7 +1478,7 @@ if (IS_DEBUG()) print *,'DEBUG:245: out-sizes=',size(outchans, 1),' s2=',size(ou
 
     ! Get the Array of Tstart
     ! FTGCV[SBIJKEDCM](unit,colnum,frow,felem,nelements,nullval, > values,anyf,status) ! FiT_Get_Column_Value
-    call FTGCVD(funit, colnum, 1, 1, nrows, nullvald, artime, anyf, status)
+    call FTGCVD(funit, colnum, 1, 1, nrows, UNDEF_DOUBLE, artime, anyf, status)
 
     ! Get summed channle data
     do iband=1, size(chans, 2)
@@ -1451,7 +1488,7 @@ if (IS_DEBUG()) print *,'DEBUG:369: iband=',iband,' sum=',sum(outchans(:,2,iband
 
     call FTCLOS(funit, status)
     call err_exit_if_status(status, 'Failed to close the FITS: '//trim(fname))
-    call FTFIOU(funit, status)
+    if (success_ftgiou) call FTFIOU(funit, status)
 
   end subroutine asm_time_row_det_band
 
@@ -1488,6 +1525,7 @@ if (IS_DEBUG()) print *,'DEBUG:142: out-beg sum=',sum(outchans(:,2,1))
       write(stderr,'("WARNING: Failed in ftgiou(): unit = ",I12,". Manually reset to ",I3)') unit, MY_FUNIT
       unit = MY_FUNIT
     end if
+!unit = MY_FUNIT  ! DEBUG
 
 if (IS_DEBUG()) print *,'DEBUG:145: size1=',size(outchans,1),'sizes=',size(outchans, 2),' s3=',size(outchans, 3)
     ! QDP file
