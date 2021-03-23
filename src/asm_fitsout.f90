@@ -529,12 +529,13 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
   end function get_merged_head
 
   ! Returns merged FITS header from Telemetry and FRF
-  function get_asm_fits_header(tfhead, frfhead, trows, relrows, status) result(rethead)
+  function get_asm_fits_header(tfhead, frfhead, trows, relrows, status, creator) result(rethead)
     type(fits_header), intent(in) :: tfhead, frfhead
     type(asm_telem_row), dimension(:), intent(in) :: trows
     !type(asm_frfrow), dimension(:), intent(in) :: frfrows
     type(asm_sfrow), dimension(:), intent(in) :: relrows
     integer, intent(out) :: status
+    character(len=*), intent(in), optional :: creator  ! e.g., asmmkevt ver.2021-03-31
     type(fits_header) :: rethead
 
     integer, dimension(1) :: ilocs
@@ -549,6 +550,10 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
 
     ! Initialization
     rethead = get_merged_head(tfhead, frfhead)
+
+    if (present(creator)) then
+      rethead%CREATOR%val = trim(creator)
+    end if
 
     rethead%SFRAMES%val = count(relrows%is_valid)
     rethead%NROWSTEL%val = size(trows)
@@ -698,6 +703,8 @@ if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
     call FTPKYJ(unit, fhd%SACD%name, fhd%SACD%val, fhd%SACD%comment, status)
     call warn_ftpcl_status(status, 'ftpkyj', trim(Subname)//':SACD')
     call FTPKYS(unit, fhd%INSTRUME%name, fhd%INSTRUME%val, fhd%INSTRUME%comment, status)
+    call FTPKYS(unit, fhd%ORIGIN%name,   fhd%ORIGIN%val,   fhd%ORIGIN%comment,   status)
+    call FTPKYS(unit, fhd%CREATOR%name,   fhd%CREATOR%val, fhd%CREATOR%comment,  status)
     call FTPKYS(unit, fhd%FILENAME%name, fhd%FILENAME%val, fhd%FILENAME%comment, status)
     call FTPKYS(unit, fhd%FRFFILE%name, fhd%FRFFILE%val, fhd%FRFFILE%comment, status)
     call FTPKYS(unit, fhd%kPASS%name, fhd%kPASS%val, fhd%kPASS%comment, status)

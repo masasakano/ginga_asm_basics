@@ -11,6 +11,7 @@ program asmmkevt
 
   implicit none
 
+  character(len=*), parameter :: FITS_CREATOR = 'asmmkevt ver.'//ASM_BASICS_VERSION ! defined in asm_fits_common
   integer, parameter :: Maxaxes = 2, nbytepercard = 144, nbyteforheader = 16
   character(len=*), parameter :: Subname = 'main'
   integer sfn                                 
@@ -181,7 +182,7 @@ program asmmkevt
 
   !call write_asm_fits(trim(DEF_FNAME_OUT), tfhead, trows, frfrows, relrows, status)
   !call write_asm_evt_fits(outfil, tfhead, trows, relrows, status)
-  outhead = get_asm_fits_header(tfhead, frfhead, trows, relrows, status)
+  outhead = get_asm_fits_header(tfhead, frfhead, trows, relrows, status, FITS_CREATOR)
   !outhead = get_merged_head(tfhead, frfhead)
   call write_asm_evt_fits(get_val_from_key('outfile', argv), outhead, trows, relrows, status, comname, argv(:)%val)
 

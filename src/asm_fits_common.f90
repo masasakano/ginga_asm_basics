@@ -6,6 +6,7 @@ module asm_fits_common
   use err_exit
   implicit none 
 
+  character(len=*), parameter, public :: ASM_BASICS_VERSION = '2021-03-23'
   integer, parameter, private :: dp  = kind(1.d0)
   integer, parameter, public ::  dp8 = 8 ! FITS file REAL8
   integer, parameter, public ::  ip4 = 4 ! "J" in FITSIO; FITS file INTEGER4
@@ -29,6 +30,8 @@ module asm_fits_common
   real(dp8),    parameter :: UNDEF_REAL   = -1024.0_dp8  ! for backward compatibility (though the name suggests it to be for the standard REAL)
   integer(ip4), parameter :: UNDEF_INT  = -999_ip4
   integer(ip2), parameter :: UNDEF_INT2 = -999_ip2
+  character(len=*), parameter, private :: DEF_FITS_GINGA_ORIGIN = 'ISAS/JAXA'
+  character(len=*), parameter, private :: DEF_FITS_GINGA_CREATOR = 'ginga_asm_basics ver.'//ASM_BASICS_VERSION
   character(len=*), parameter :: OUTFTCOMMENT1 = 'Created by combining a Ginga telemetry file&
      & and corresponding FRF for the LAC.  However, the LAC FRFs usually lack the data in which&
      & the ASM-Mode is on.  Therefore, no meaningful Euler angles appear in the Table&
@@ -502,7 +505,10 @@ module asm_fits_common
    !character(len=max_fits_char) :: TTYPE1  ='' ; ! 'Telemetry'          / label for field   1
    !character(len=max_fits_char) :: TFORM1  ='' ; ! '144B    '           / data format of field: BYTE
     type(fhead1ch) :: EXTNAME = fhead1ch(name='EXTNAME',  comment='name of this binary table extension'); ! 'SIRIUS binary'
-    type(fhead1ch) :: ORIGIN  = fhead1ch(name='ORIGIN',   comment='Origin of the file.'); ! 'ISAS    '     
+    type(fhead1ch) :: ORIGIN  = fhead1ch(val=DEF_FITS_GINGA_ORIGIN,  name='ORIGIN',  comment='Origin of the file.');
+    type(fhead1ch) :: CREATOR = fhead1ch(val=DEF_FITS_GINGA_CREATOR, name='CREATOR', comment='Generator command name');
+      ! (Suzaku)        CREATOR = 'extractor v5.25'    / Extractor
+      ! (ASM-telemetry) CREATOR = 'GINGA_facom_FRF2FITS version 3.0 (2005-03-27)' / s/w task which wrote
     type(fhead1ch) :: TELESCOP= fhead1ch(name='TELESCOP', comment='Telescope name');      ! 'GINGA   '     
     type(fhead1i4) :: SACD    = fhead1i4(name='SACD',     comment='Satelite_code'); !                   18
     type(fhead1i4) :: FRAMES  = fhead1i4(name='FRAMES',   comment='Number of frames in the file'); ! 40256
