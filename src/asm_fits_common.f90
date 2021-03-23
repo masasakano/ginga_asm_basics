@@ -1008,12 +1008,23 @@ contains
   end subroutine dump_chars
 
   ! dump all_argv
-  subroutine dump_all_argv(rows)
+  subroutine dump_all_argv(rows, nargv)
+    character(len=*), parameter :: Subname = 'dump_all_argv'
     type(t_argv), dimension(:), intent(in) :: rows
-    integer :: i
+    integer, intent(in), optional :: nargv  ! Optionally specify the size of the Array if it is not size(rows).
+    integer :: i, nsize_rows
 
+    nsize_rows = size(rows)
+    if (present(nargv)) then
+      if (nsize_rows < nargv) then
+        call err_exit_with_msg('('//Subname//') given nargv=('//trim(ladjusted_int(nargv))//') > '//trim(ladjusted_int(nsize_rows)))
+      end if
+      nsize_rows = nargv
+    else
+    end if
+    
     print *, '--------- all argv (size=', size(rows), ') ---------' 
-    do i=1, size(rows)
+    do i=1, nsize_rows
       print *, trim(ladjusted_int(i))//': ('//trim(rows(i)%key)//') ', trim(rows(i)%val)
     end do
   end subroutine dump_all_argv

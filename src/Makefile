@@ -26,7 +26,7 @@ MACOPT = LD="gfortran -g" CC="${GCC} -g" FC="gfortran -g -c -fno-second-undersco
 
 INSTALL_DIR = ../bin
 
-ALL = asmdump asmmkevt asmtelemetryout asm2qdp
+ALL = asmdump asmmkevt asmtelemetryout asm2qdp mjd2date date2mjd
 
 # ALLS = make_sf_list.pl
 
@@ -62,6 +62,12 @@ ASMDUMP_OBJ = err_exit.o fort_util.o \
 #        frfread.o getoa2.o cnven.o mjd.o srcarray.o\
 #        satpn3.o orbit.o recpol_new.o
 
+mjd2date.o: ../../ginga_tools/v1.1/src/mjd.o fort_util.o err_exit.o asm_fits_common.o mjd2date.f90
+	${FC} ${FFLAGS} -c -o $@ mjd2date.f90 ${LINKLIB}
+
+date2mjd.o: ../../ginga_tools/v1.1/src/mjd.o fort_util.o err_exit.o asm_fits_common.o date2mjd.f90
+	${FC} ${FFLAGS} -c -o $@ date2mjd.f90 ${LINKLIB}
+
 asm2qdp.o: ${ASMDUMP_OBJ} asm2qdp.f90
 	${FC} ${FFLAGS} -c -o $@ asm2qdp.f90 ${LINKLIB}
 
@@ -73,6 +79,12 @@ asmmkevt.o: ${ASMDUMP_OBJ} asmmkevt.f90
 
 asmdump.o: ${ASMDUMP_OBJ} asmdump.f90
 	${FC} ${FFLAGS} -c -o $@ asmdump.f90 ${LINKLIB}
+
+mjd2date: ../../ginga_tools/v1.1/src/mjd.o fort_util.o err_exit.o asm_fits_common.o mjd2date.o
+	${LD} -o mjd2date mjd2date.o ../../ginga_tools/v1.1/src/mjd.o fort_util.o err_exit.o asm_fits_common.o ${LINKLIB}
+
+date2mjd: ../../ginga_tools/v1.1/src/mjd.o fort_util.o err_exit.o asm_fits_common.o date2mjd.o
+	${LD} -o date2mjd date2mjd.o ../../ginga_tools/v1.1/src/mjd.o fort_util.o err_exit.o asm_fits_common.o ${LINKLIB}
 
 asm2qdp: ${GINGA_FRFREAD_OBJ} ${ASMDUMP_OBJ} asm2qdp.o
 	${LD} -o asm2qdp asm2qdp.o ${GINGA_FRFREAD_OBJ} ${ASMDUMP_OBJ} ${LINKLIB}
