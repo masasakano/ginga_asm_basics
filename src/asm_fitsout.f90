@@ -852,6 +852,8 @@ if (IS_DEBUG()) print *,'DEBUG:042:b3ftart-out, status=',status
     character(len=8), dimension(:), allocatable :: cols8
 
     naxis2 = sum(relrows%nframes, relrows%is_valid)  ! Number of valid frames.
+    if (naxis2 == 0) return ! i.e., no table data. Header keyword EXISTDAT should be FALSE, too.
+
     ntrows   = size(trows)
     nrelrows = size(relrows)
 
@@ -871,7 +873,7 @@ call dump_type(colheads(7))
 print *,'DEBUG:2439-8:'
 call dump_type(colheads(8))
 end if
-!FTPCL[SLBIJKEDCM](unit,colnum,frow,felem,nelements,values, > status) ! frow: 1st row?, felem: 1st element?
+    !FTPCL[SLBIJKEDCM](unit,colnum,frow,felem,nelements,values, > status) ! frow: 1st row?, felem: 1st element?
     status = 0 
     iframe = 0 
     ittype = 0  ! TTYPEn
@@ -974,7 +976,8 @@ end if
 end if
           end do
           ittype = ittype + 1  ! FITS Table column number
-if (IS_DEBUG()) print *,'DEBUG:2410:ikind=',ikind, ' ittype=', ittype , ' iprm=',iprm
+if (IS_DEBUG()) print *,'DEBUG:2410:ikind=',ikind, ' ittype=', ittype , ' iprm=',trim(ladjusted_int(iprm)), &
+  ' naxis2=',trim(ladjusted_int(naxis2))
           call FTPCLD(unit, ittype, 1, 1, naxis2, cold, status)  ! colnum = 1
 ! print *,'DEBUG:430:ittype=',ittype,' iout=',iout,' naxis2=',naxis2,' cold(3)=',cold(66)
           call warn_ftpcl_status(status, 'FTPCLD', ckey)
@@ -1209,7 +1212,7 @@ if (IS_DEBUG()) call dump_type(relrows(5))
     character(len=*), dimension(:), intent(in) :: args
     character(len=*), dimension(:), intent(in), optional :: outcolkeys  ! e.g., ['Tstart', 'Euler', SFNum]
 
-    integer :: unit, bitpix, blocksize !, naxis, hdutype, nframes, naxis1
+    integer :: unit, bitpix, blocksize, hdutype !, naxis, nframes, naxis1
     character(len=30) :: errtext
     integer :: nhdu
     logical simple, extend
@@ -1313,40 +1316,72 @@ if (IS_DEBUG()) print *,'test-new-ext=',status,' / HDU=',nhdu,' / ',trim(errtext
 
     call write_cols(unit, trows, relrows, colheads, status)  !!!!!!!!!!!!!!!
 
-!    ! Write Table (double precision)
-!    !FTPCL[SLBIJKEDCM](unit,colnum,frow,felem,nelements,values, > status) ! frow: 1st row?, felem: 1st element?
-!    call FTPCLD(unit,1,1,1,2,dvalues, status)  ! colnum = 1
-!    call FTGHDN(unit, nhdu)  ! => CHDU: Current HDU
+    !!----- Trying to eliminate the error in fverify (File has extra byte(s) after last HDU at byte 40320) by creating a new extension and deleting it ----------
+!    call FTCRHD(unit, status)
 !    call FTGERR(status, errtext)
-!print *,'test-dval-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
-!    
-!    !call ftpkys(unit,'TDIM2','(20,1)','for Character in Binary table',status)
-!    !call FTPCLS(unit,2,1,1,2,svalues, status)  ! colnum = 2
-!    call FTPCLD(unit,2,1,1,2,d2values, status)
-!    call FTGHDN(unit, nhdu)
+!if (IS_DEBUG()) print *,'DEBUG:898b: FTCRHD-status=',status,' / ',trim(errtext)
+!    call FTDHDU(unit, hdutype,status)
 !    call FTGERR(status, errtext)
-!print *,'test-char-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)  ! If wrong, 309  / not an ASCII (A) column
-    !! call FTMAHD(unit, 2, hdutype, status)           ! Move to the Absolute extention (1st extension if 2)
-    !call FTMRHD(unit, 1, hdutype,status) ! nmove==1 ! cMove to a new (existing) HDU forward or backwards relative to the CHDU
-    !call FTGHDN(unit, nhdu)
-    !call FTGERR(status, errtext)
-    !print *,'test-move-status=',status,' / HDU=',nhdu,' / ',trim(errtext)
-    
-    !call ftphpr(unit,simple,bitpix,0,naxes,0,1,extend,status)
-    !call FTGERR(status, errtext)
-    !print *,'test-HD-phpr-status=',status,' / ',trim(errtext)
-    
+!if (IS_DEBUG()) print *,'DEBUG:898c: FTDHDU-status=',status,' / ',trim(errtext)
+!    call FTMAHD(unit, 1, hdutype, status)           ! Move to the Absolute extention (1 means primary header)
+!    call FTGERR(status, errtext)
+!if (IS_DEBUG()) print *,'DEBUG:898d: FTMAHD-status=',status,' / ',trim(errtext)
+
     ! close the file and free the unit number
     call ftclos(unit, status)
+    call err_exit_if_status(status, 'in FTCLOS()')
     call FTGERR(status, errtext)
-if (IS_DEBUG()) print *,'DEBUG: test-close-status=',status,' / ',trim(errtext)
+if (IS_DEBUG()) print *,'DEBUG:899: FTCLOS()-status=',status,' / ',trim(errtext)
     call ftfiou(unit, status)
 
     if (allocated(ttypes)) deallocate(ttypes)
     if (allocated(tforms)) deallocate(tforms)
     if (allocated(tunits)) deallocate(tunits)
     if (allocated(colheads)) deallocate(colheads)
+
+    ! Very bad "emergency" work-around practice for the empty-table FITS...
+    if (.not. any(relrows%is_valid)) then
+      call force_delete_trailing_bytes_fits(outfil)
+    end if
   end subroutine write_asm_evt_fits
+
+
+  ! Delete FORCIBLY the last bytes in the FITS file with direct access.
+  !
+  ! *** CAUTION ***
+  !
+  ! This is an extremely dirty hack for work-around of FITSIO mal-behaviour!!
+  ! Basically this read and write the FITS as a binary, deleting
+  ! a certain number of the bytes at the tail, when the FITS file
+  ! contains no table data.
+  !
+  ! The number should depend on the numbers of the FITS header keywords
+  ! and table columns; however this routine takens account of none!
+  ! Therefore, this routine would fail immediately as soon as a FITS header
+  ! keyword or table column is deleted or a new one is added in the output FITS
+  ! by this package.
+  !
+  subroutine force_delete_trailing_bytes_fits(outfil)
+    implicit none
+    integer, parameter :: MY_FUNIT = 123  ! arbitrary
+    character(len=*), parameter :: Subname = 'force_delete_trailing_bytes_fits'
+    character(len=*), intent(in) :: outfil
+
+    integer, parameter :: Fitssize = 40320
+    character(len=SIZE_EMPTY_FITS_BYTES) :: chall ! defined in asm_fits_common
+    integer :: ios
+
+    open(unit=MY_FUNIT, iostat=ios, status='old', file=outfil, form='unformatted', access='direct', recl=SIZE_EMPTY_FITS_BYTES)
+    call err_exit_if_status(ios, '('//trim(subname)//')Failed in reopening '//trim(outfil))
+    read(MY_FUNIT,rec=1) chall
+    close(unit=MY_FUNIT)
+    open(unit=MY_FUNIT, iostat=ios, status='replace', file=outfil, form='unformatted' &
+       , access='direct', recl=SIZE_EMPTY_FITS_BYTES, action='write')
+    call err_exit_if_status(ios, '('//trim(subname)//')Failed in reopening to write '//trim(outfil))
+    write(MY_FUNIT,rec=1) chall
+    close(unit=MY_FUNIT)
+  end subroutine force_delete_trailing_bytes_fits
+
 
   ! Read multiple channels from FITS and returns a (Integer*2) 2-dim Array (value, detector) for the summed data
   function get_asm_summed_chan(funit, chan_l_h, nrows) result(retchans)

@@ -7,6 +7,10 @@ module asm_fits_common
   implicit none 
 
   character(len=*), parameter, public :: ASM_BASICS_VERSION = '2021-03-23'
+  integer, parameter :: SIZE_EMPTY_FITS_BYTES = 40320
+  ! This value would change as soon as a FITS header keyword
+  ! or table column is deleted or a new one is added in the output FITS by this package.
+
   integer, parameter, private :: dp  = kind(1.d0)
   integer, parameter, public ::  dp8 = 8 ! FITS file REAL8
   integer, parameter, public ::  ip4 = 4 ! "J" in FITSIO; FITS file INTEGER4
@@ -1108,7 +1112,7 @@ contains
       write(*,'(" reason_invalid = ''", A, "''")') trim(row%reason_invalid%text)
     end if
     write(*,'(" irowt(irow_Telemetry)=",I6,", nFrames=",I5)') row%irowt, row%nframes
-    write(*,'(" with_frf=",L1," irowf(irow_FRF)=",I6,", sfn(SF-No)=",I6,", lostf=",A6)') &
+    write(*,'(" with_frf=",L1," irowf(irow_FRF)=",I6,", sfn(SF-No)=",I6,", lostf=",A)') &
        row%with_frf, row%irowf, row%frf%sfn, trim(s_lostf)
     write(*,'(" mode_asm(1:ON)=",I4,", slew(1:ON)=",I4,", PHA(1:TIME)=",I4)') &
        row%mode_asm, row%mode_slew, row%mode_PHA
