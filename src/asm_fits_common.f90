@@ -6,7 +6,7 @@ module asm_fits_common
   use err_exit
   implicit none 
 
-  character(len=*), parameter, public :: ASM_BASICS_VERSION = '2021-03-23'
+  character(len=*), parameter, public :: ASM_BASICS_VERSION = '2021-03-25'
   integer, parameter :: SIZE_EMPTY_FITS_BYTES = 40320
   ! This value would change as soon as a FITS header keyword
   ! or table column is deleted or a new one is added in the output FITS by this package.
@@ -1701,8 +1701,10 @@ if (ittype > nsiz) call err_exit_play_safe()
     end if
         
     call GET_ENVIRONMENT_VARIABLE('GINGA_DEBUG', env_debug, STATUS=status)
-    if ((status == 1) .or. (trim(env_debug) == 'false') .or. (trim(env_debug) == 'no')) then  ! 1 for non-existent, 2 for environment var. not-supported by the system
+    if ((status == 1) .or. (status == 2)) then  ! 1 for non-existent, 2 for environment var. not-supported by the system
       ret = .false.
+      prev_result = 0
+    else if ((trim(env_debug) == 'false') .or. (trim(env_debug) == 'no')) then  ! 1 for non-existent, 2 for environment var. not-supported by the system
       prev_result = 0
     else
       ret = .true.

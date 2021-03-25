@@ -61,7 +61,7 @@ stored の場合は、
 
 ### Frameのメインデータ (128 bytes (=ワード)) ###
 
-一方、各frameの標準形式は、中間報告書 Sec.5.5 pp.198 を参照。
+一方、各frameの標準形式は、ASTRO-C(Ginga)中間報告書 Sec.5.5 pp.198 を参照。
 
 Frame自体は、あくまで(144 bytesではなく) 128 bytes(=ワード)として定義されていることに注意。
 
@@ -162,7 +162,7 @@ Parameters
 
 Telemetry FITSの各Frameでは、frame-header (16-bytes) の Byte08 (`Counter_A2`)および frame-main-data (128-bytes)のW3(`FI` (Frame-Information?) と呼ばれる)は、SF番号とFrame番号との情報を含む(両者は完全に一致するはず)。
 
-Formatは中間報告書 Table 5.1.3, pp.201。端的には上位2 bitsがSF番号(わずか0〜3だけで回転)、下位6 bitsがFrame番号である。
+FormatはASTRO-C(Ginga)中間報告書 Table 5.1.3, pp.201。端的には上位2 bitsがSF番号(わずか0〜3だけで回転)、下位6 bitsがFrame番号である。
 
 Frame番号は、各SFにつき、0〜63まで順番に回っていく。SF番号は、0〜3で回っていく……が、たまに不連続になったりあるいは同じSF番号が異なるはずのSFで連続するケースが認められた(bitrate が変化した時らしい)。
 
@@ -173,7 +173,7 @@ FRF においてつけられる、SF番号は、Telemetry FITSの(Frame番号か
 * (LACの)FRFでは、ASM-mode のデータ(もしくはLACモードではないデータ)のSFは欠落しているようだ。
 * FRFから `GETOAT()` で得たMJDは、第32Frame (=F31)の先頭の時刻と1μ秒程度の精度で一致する(1μ秒程度はずれることがあり、ずれは一定ではない)。
   * すなわち、SFの開始時刻ではなく、そのSFの真ん中の時刻。
-  * Frame同士の時間間隔は Bitrate-H でも 62.5 ms (中間報告書 Table 4.1.2, pp.187)なので、1μ秒程度のずれはおそらく問題にならない。
+  * Frame同士の時間間隔は Bitrate-H でも 62.5 ms (ASTRO-C(Ginga)中間報告書 Table 4.1.2, pp.187)なので、1μ秒程度のずれはおそらく問題にならない。
 
 ---------
 

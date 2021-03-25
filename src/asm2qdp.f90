@@ -5,9 +5,10 @@ program asm2qdp
   use err_exit
   use fort_util
   use asm_fits_common
-  use asm_aux
-  use asm_read_telemetry
-  use asm_fitsout
+  !use asm_aux
+  !use asm_read_telemetry
+  !use asm_fitsout
+  use asm_read_evt
 
   implicit none
 
@@ -22,12 +23,12 @@ program asm2qdp
 
   character(len=1024) :: arg, comname = ''
   type(t_argv), dimension(:), allocatable :: allargv
-  character(len=255) :: env_ginga_chatter
+  character(len=255) :: env_ginga_chatter = ''
   integer :: chatter = -99  ! read only once
   !type(t_argv), dimension(3) :: argv
   !argv = [t_argv(key='telemetry'), t_argv(key='FRF'), t_argv(key='outfile')] 
 
-  !! USAGE: ./asmtelemetryout ../../../ginga_samples/ginga_sirius_P198804280220.fits ../../../ginga_samples/FR880428.S0220.fits ../../../ginga_samples/mkevt_out_test.fits
+  !! USAGE: ./asm2qdp ../test/test_output/outmain3.fits ~/scratch/outqdp_direct_4_13 4 13
 
   !-- Handle the command-line arguments.
 

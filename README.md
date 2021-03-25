@@ -78,6 +78,7 @@ You may set the environmental variable `GINGA_DEBUG` for testing.  Some diagnost
 * `asm_aux.f90`: Auxiliary functions/subroutines specific in this package (NOT Fortran-generic utility).
 * `asm_fits_common.f90`: Define FITS-related types and constant variables and common basic routines.
 * `asm_fitsout.f90`: Anything to do with outputting FITS files and with merging processing.
+* `asm_read_evt.f90`: Read a generated ASM event FITS and output it as a pair of QDP/PCO.
 * `asm_read_telemetry.f90`: Anything to do with reading FITS files.
 * `asmdump.f90`: Obsolete and unused.
 * `asmmkevt.f90`: Main program to deal with the command-line arguments and run the process.

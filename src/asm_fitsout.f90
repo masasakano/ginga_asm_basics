@@ -800,7 +800,7 @@ if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
   ! Test output for debugging.
   subroutine write_tmp_fits(fname, status)
     implicit none
-    integer, parameter :: MY_FUNIT = 160  ! arbitrary
+    integer, parameter :: MY_FUNIT = 60  ! arbitrary
     character(len=*), intent(in) :: fname
     integer, intent(out) :: status
     integer :: unit, bitpix, naxis = 0
@@ -1198,7 +1198,7 @@ if (IS_DEBUG()) call dump_type(relrows(5))
   ! Output FITS file of the ASM data
   subroutine write_asm_evt_fits(outfil, fhead, trows, relrows, status, comname, args, outcolkeys)
     implicit none
-    integer, parameter :: MY_FUNIT = 159  ! arbitrary
+    integer, parameter :: MY_FUNIT = 59  ! arbitrary
     character(len=*), parameter :: Subname = 'write_asm_evt_fits'
     character(len=*), parameter :: Extname = 'ASM table'
 
@@ -1384,7 +1384,7 @@ if (IS_DEBUG()) print *,'DEBUG:899: FTCLOS()-status=',status,' / ',trim(errtext)
 
 
   ! Read multiple channels from FITS and returns a (Integer*2) 2-dim Array (value, detector) for the summed data
-  function get_asm_summed_chan(funit, chan_l_h, nrows) result(retchans)
+  function get_asm_summed_chan_orig(funit, chan_l_h, nrows) result(retchans)
     implicit none
     character(len=*), parameter :: Subname = 'get_asm_summed_chan'
     integer, intent(in) :: funit, nrows
@@ -1408,19 +1408,13 @@ if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:261: colnum=',colnum,' nrows=',
         tmpchs = 0_ip2
         ! FiTs_GeT_Column_Value: FTGCV[SBIJKEDCM](unit,colnum,frow,felem,nelements,nullval, >values,anyf,status)
         !  anyf is True if any of the values is undefined.
-        call FTGCVI(funit, colnum, 1, 1, nrows, 0, tmpchs, anyf, status)
+        call FTGCVI(funit, colnum, 1, 1, nrows, 0, tmpchs, anyf, status) ! No check for undefined.
         !call FTGCVI(funit, colnum, 1, 1, nrows, UNDEF_INT2, tmpchs, anyf, status)
 !if (.true.) then
         if (status .ne. 0) then
           call FTGERR(status, errtext)
           write(stderr,'("ERROR: (",A,") Failed in FTGCVI() with Status=",A," (",A,"): colnum=",A)') &
              Subname, trim(ladjusted_int(status)), trim(errtext), trim(ladjusted_int(colnum))
-
-!          call FTGCVI(funit, colnum, 1, 1, nrows, 0, tmpchs, anyf, status)
-!          if (status .ne. 0) then
-!            call FTGERR(int(status), errtext)
-!            write(stderr,'("ERROR: (",A,") Failed(2) in FTGCVI() with Status=",A," (",A,"): colnum=",A)') &
-!               Subname, trim(ladjusted_int(int(status))), trim(errtext), trim(ladjusted_int(colnum))
 
           !! ------------ Comment ------------
           !! Rerun FTGCVI() with INTEGER*2 status, and it may work if GINGA_DEBUG=1
@@ -1432,7 +1426,7 @@ if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:261: colnum=',colnum,' nrows=',
                Subname, trim(ladjusted_int(int(statusi2))), trim(errtext), trim(ladjusted_int(colnum))
           end if
         else
-          write(stderr,'("NOTE: Success in FTGCVI()")')
+          if (IS_DEBUG()) write(stderr,'("NOTE: Success in FTGCVI()")')
           if (anyf) write(stderr,'("ERROR: (",A,") anyf is TRUE: colnum=",A)') &
              Subname, trim(ladjusted_int(colnum))
         end if
@@ -1445,13 +1439,13 @@ if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:269: 110(det=2)=',retchans(110,
     end do
 if (IS_DEBUG())                   print *,'DEBUG:270:  87=',retchans(87, :)
 if (IS_DEBUG())                   print *,'DEBUG:270: 110=',retchans(110, :)
-  end function get_asm_summed_chan
+  end function get_asm_summed_chan_orig
 
   ! Read ASM fits and returns required Arrays to output.
-  subroutine asm_time_row_det_band(fname, chans, artime, outchans)
+  subroutine asm_time_row_det_band_orig(fname, chans, artime, outchans)
     implicit none
     character(len=*), parameter :: Subname = 'asm_time_row_det_band'
-    integer, parameter :: MY_FUNIT = 161  ! arbitrary
+    integer, parameter :: MY_FUNIT = 61  ! arbitrary
     character(len=*), intent(in) :: fname  ! fname for ASM.fits
     integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band)
     real(kind=dp8), dimension(:), allocatable, intent(out) :: artime
@@ -1478,10 +1472,10 @@ if (IS_DEBUG()) write(stderr,'("(",A,") UNIT= ",A)') Subname, trim(ladjusted_int
         funit = MY_FUNIT
         success_ftgiou = .false.
       else
-        !write(stderr,'(": unit = ",I12,", which is used nonetheless.")') funit
-        write(stderr,'(": unit = ",I12,", which is reset to ",I3)') funit, MY_FUNIT
-        funit = MY_FUNIT
-        success_ftgiou = .false.
+        write(stderr,'(": unit = ",I12,", which is used nonetheless.")') funit
+        !write(stderr,'(": unit = ",I12,", which is reset to ",I3)') funit, MY_FUNIT
+        !funit = MY_FUNIT
+        !success_ftgiou = .false.
       end if
     end if
 !funit = MY_FUNIT  ! DEBUG
@@ -1531,7 +1525,7 @@ if (IS_DEBUG()) print *,'DEBUG:245: out-sizes=',size(outchans, 1),' s2=',size(ou
 
     ! Get summed channle data
     do iband=1, size(chans, 2)
-      outchans(:,:,iband) = get_asm_summed_chan(funit, chans(:, iband), nrows)
+      outchans(:,:,iband) = get_asm_summed_chan_orig(funit, chans(:, iband), nrows)
 if (IS_DEBUG()) print *,'DEBUG:369: iband=',iband,' sum=',sum(outchans(:,2,iband))
     end do
 
@@ -1541,7 +1535,7 @@ if (IS_DEBUG()) print *,'DEBUG:369: iband=',iband,' sum=',sum(outchans(:,2,iband
 
     ! Get column number for Tstart (should be 97)
     ! FTGCNO(unit,casesen,coltemplate, > colnum,status) ! FiT_Get_Column_from_Name_to_nO
-    call FTGCNO(funit, .false., coltemplate, colnum, status)
+    call FTGCNO(funit, .false., trim(coltemplate), colnum, status)
 
     ! Get the Array of Tstart
     ! FTGCV[SBIJKEDCM](unit,colnum,frow,felem,nelements,nullval, > values,anyf,status) ! FiT_Get_Column_Value
@@ -1551,13 +1545,13 @@ if (IS_DEBUG()) print *,'DEBUG:369: iband=',iband,' sum=',sum(outchans(:,2,iband
     call err_exit_if_status(status, 'Failed to close the FITS: '//trim(fname))
     if (success_ftgiou) call FTFIOU(funit, status)
 
-  end subroutine asm_time_row_det_band
+  end subroutine asm_time_row_det_band_orig
 
 
   ! Write QDP/PCO
-  subroutine write_qdp(fname, outroot, chans, artime, outchans, status)
+  subroutine write_qdp_orig(fname, outroot, chans, artime, outchans, status)
     implicit none
-    integer, parameter :: MY_FUNIT = 162  ! arbitrary
+    integer, parameter :: MY_FUNIT = 62  ! arbitrary
     real(dp8), parameter :: ys1 = 0.75, ys2 = 0.9+1/60.d0, yd1 = -(0.1+1/30.d0)  ! QDP Y-starting positions 1 and 2 and difference
     character(len=*), intent(in) :: fname, outroot  ! fname for ASM.fits
     integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band) ! for displaying purpose only
@@ -1647,10 +1641,10 @@ if (IS_DEBUG()) print *,'DEBUG:157: out-after sum=',sum(outchans(:,2,1))
     
     close(UNIT=unit, IOSTAT=statustmp)
     call FTFIOU(unit, statustmp)
-  end subroutine write_qdp
+  end subroutine write_qdp_orig
 
   ! Read ASM fits and write QDP/PCO (Parent subroutine)
-  subroutine read_asm_write_qdp(fname, outroot, chans) !, status)
+  subroutine read_asm_write_qdp_orig(fname, outroot, chans) !, status)
     implicit none
     character(len=*), intent(in) :: fname, outroot  ! fname for ASM.fits
     integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band)
@@ -1659,15 +1653,15 @@ if (IS_DEBUG()) print *,'DEBUG:157: out-after sum=',sum(outchans(:,2,1))
     integer(kind=ip2), dimension(:,:,:), allocatable :: outchans
 
 if (IS_DEBUG()) print *,'DEBUG:112: starting(sub)... chans=',chans, ' outroot=', trim(outroot)
-    call asm_time_row_det_band(fname, chans, artime, outchans)
+    call asm_time_row_det_band_orig(fname, chans, artime, outchans)
 if (IS_DEBUG()) print *,'DEBUG:411: after.(sub) sum=',sum(outchans(:,2,1))
 if (IS_DEBUG()) print *,'DEBUG:413: after.(sub)... a=',artime(1:4)
-    call write_qdp(fname, outroot, chans, artime, outchans, status)
+    call write_qdp_orig(fname, outroot, chans, artime, outchans, status)
 if (IS_DEBUG()) print *,'DEBUG:812: end.(sub)... chans=',chans, ' outroot=', trim(outroot)
 
     if (allocated(artime)) deallocate(artime)
     if (allocated(outchans)) deallocate(outchans)
-  end subroutine read_asm_write_qdp
+  end subroutine read_asm_write_qdp_orig
 
 !  ! Output FITS file of the ASM data
 !  subroutine write_asm_fits(fname, fitshead, trows, frfrows, relrows, status)
