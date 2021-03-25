@@ -800,7 +800,7 @@ if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
   ! Test output for debugging.
   subroutine write_tmp_fits(fname, status)
     implicit none
-    integer, parameter :: MY_FUNIT = 160  ! arbitrary
+    integer, parameter :: MY_FUNIT = 60  ! arbitrary
     character(len=*), intent(in) :: fname
     integer, intent(out) :: status
     integer :: unit, bitpix, naxis = 0
@@ -1198,7 +1198,7 @@ if (IS_DEBUG()) call dump_type(relrows(5))
   ! Output FITS file of the ASM data
   subroutine write_asm_evt_fits(outfil, fhead, trows, relrows, status, comname, args, outcolkeys)
     implicit none
-    integer, parameter :: MY_FUNIT = 159  ! arbitrary
+    integer, parameter :: MY_FUNIT = 59  ! arbitrary
     character(len=*), parameter :: Subname = 'write_asm_evt_fits'
     character(len=*), parameter :: Extname = 'ASM table'
 
@@ -1392,11 +1392,13 @@ if (IS_DEBUG()) print *,'DEBUG:899: FTCLOS()-status=',status,' / ',trim(errtext)
     integer(kind=ip2), dimension(nrows, NUM_INSTR) :: retchans  ! NUM_INSTR defined in asm_fits_common
 
     integer(kind=ip2), dimension(nrows) :: tmpchs
+    integer, dimension(nrows) :: tmpch4
     integer(kind=ip2) :: nullval
     logical :: anyf
     integer :: status, colnum, ich, idet
     integer(kind=ip2) :: statusi2
     character(len=30) :: errtext
+logical, parameter :: RunInt2 = .true.  ! DEBUG: if .false., FTGCVJ() is run.
 
     nullval = -999
 if (IS_DEBUG()) print *,'DEBUG:259: nrows=',nrows,' chan_l_h=',chan_l_h
@@ -1406,9 +1408,14 @@ if (IS_DEBUG()) print *,'DEBUG:259: nrows=',nrows,' chan_l_h=',chan_l_h
         colnum = (idet-1)*NCHANS_PHA + ich + 1   ! NCHANS_PHA defined in asm_fits_common
 if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:261: colnum=',colnum,' nrows=',nrows
         tmpchs = 0_ip2
+tmpch4 = 0
         ! FiTs_GeT_Column_Value: FTGCV[SBIJKEDCM](unit,colnum,frow,felem,nelements,nullval, >values,anyf,status)
         !  anyf is True if any of the values is undefined.
+if (RunInt2) then
         call FTGCVI(funit, colnum, 1, 1, nrows, 0, tmpchs, anyf, status)
+else
+call FTGCVJ(funit, colnum, 1, 1, nrows, 0, tmpch4, anyf, status)
+end if
         !call FTGCVI(funit, colnum, 1, 1, nrows, UNDEF_INT2, tmpchs, anyf, status)
 !if (.true.) then
         if (status .ne. 0) then
@@ -1425,19 +1432,32 @@ if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:261: colnum=',colnum,' nrows=',
           !! ------------ Comment ------------
           !! Rerun FTGCVI() with INTEGER*2 status, and it may work if GINGA_DEBUG=1
           !! There is no reason this works, when the others do not, but it seems to do so!
+if (RunInt2) then
           call FTGCVI(funit, colnum, 1, 1, nrows, 0, tmpchs, anyf, statusi2)
           if (statusi2 .ne. 0) then
             call FTGERR(int(statusi2), errtext)
             write(stderr,'("ERROR: (",A,") Failed(2) in FTGCVI() with Status=",A," (",A,"): colnum=",A)') &
                Subname, trim(ladjusted_int(int(statusi2))), trim(errtext), trim(ladjusted_int(colnum))
           end if
+else
+call FTGCVJ(funit, colnum, 1, 1, nrows, 0, tmpch4, anyf, status)
+if (status .ne. 0) then
+  call FTGERR(int(status), errtext)
+  write(stderr,'("ERROR: (",A,") Failed(2) in FTGCVI() with Status=",A," (",A,"): colnum=",A)') &
+     Subname, trim(ladjusted_int(status)), trim(errtext), trim(ladjusted_int(colnum))
+end if
+end if
         else
-          write(stderr,'("NOTE: Success in FTGCVI()")')
+          if (IS_DEBUG()) write(stderr,'("NOTE: Success in FTGCVI()")')
           if (anyf) write(stderr,'("ERROR: (",A,") anyf is TRUE: colnum=",A)') &
              Subname, trim(ladjusted_int(colnum))
         end if
 
+if (RunInt2) then
         retchans(:, idet) = retchans(:, idet) + tmpchs
+else
+retchans(:, idet) = retchans(:, idet) + int(tmpchs, kind=ip2)
+end if
       end do
 if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:268: sum=',sum(retchans(:, idet)),' for idet=',trim(ladjusted_int(idet))
 if (IS_DEBUG() .and. (idet == 5)) print *,'DEBUG:269:  87(det=5)=',retchans( 87, idet)
@@ -1451,7 +1471,7 @@ if (IS_DEBUG())                   print *,'DEBUG:270: 110=',retchans(110, :)
   subroutine asm_time_row_det_band(fname, chans, artime, outchans)
     implicit none
     character(len=*), parameter :: Subname = 'asm_time_row_det_band'
-    integer, parameter :: MY_FUNIT = 161  ! arbitrary
+    integer, parameter :: MY_FUNIT = 61  ! arbitrary
     character(len=*), intent(in) :: fname  ! fname for ASM.fits
     integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band)
     real(kind=dp8), dimension(:), allocatable, intent(out) :: artime
@@ -1478,10 +1498,10 @@ if (IS_DEBUG()) write(stderr,'("(",A,") UNIT= ",A)') Subname, trim(ladjusted_int
         funit = MY_FUNIT
         success_ftgiou = .false.
       else
-        !write(stderr,'(": unit = ",I12,", which is used nonetheless.")') funit
-        write(stderr,'(": unit = ",I12,", which is reset to ",I3)') funit, MY_FUNIT
-        funit = MY_FUNIT
-        success_ftgiou = .false.
+        write(stderr,'(": unit = ",I12,", which is used nonetheless.")') funit
+        !write(stderr,'(": unit = ",I12,", which is reset to ",I3)') funit, MY_FUNIT
+        !funit = MY_FUNIT
+        !success_ftgiou = .false.
       end if
     end if
 !funit = MY_FUNIT  ! DEBUG
@@ -1541,7 +1561,7 @@ if (IS_DEBUG()) print *,'DEBUG:369: iband=',iband,' sum=',sum(outchans(:,2,iband
 
     ! Get column number for Tstart (should be 97)
     ! FTGCNO(unit,casesen,coltemplate, > colnum,status) ! FiT_Get_Column_from_Name_to_nO
-    call FTGCNO(funit, .false., coltemplate, colnum, status)
+    call FTGCNO(funit, .false., trim(coltemplate), colnum, status)
 
     ! Get the Array of Tstart
     ! FTGCV[SBIJKEDCM](unit,colnum,frow,felem,nelements,nullval, > values,anyf,status) ! FiT_Get_Column_Value
@@ -1557,7 +1577,7 @@ if (IS_DEBUG()) print *,'DEBUG:369: iband=',iband,' sum=',sum(outchans(:,2,iband
   ! Write QDP/PCO
   subroutine write_qdp(fname, outroot, chans, artime, outchans, status)
     implicit none
-    integer, parameter :: MY_FUNIT = 162  ! arbitrary
+    integer, parameter :: MY_FUNIT = 62  ! arbitrary
     real(dp8), parameter :: ys1 = 0.75, ys2 = 0.9+1/60.d0, yd1 = -(0.1+1/30.d0)  ! QDP Y-starting positions 1 and 2 and difference
     character(len=*), intent(in) :: fname, outroot  ! fname for ASM.fits
     integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band) ! for displaying purpose only

@@ -55,6 +55,7 @@ class GingaAsmBasicsTestCase(unittest.TestCase):
         self.com_main = '../src/asmmkevt'
         self.com_sub  = '../src/asmtelemetryout'
         self.com_qdp  = '../src/asm2qdp'
+        self.com_qdpb = '../src/asm2qdpindy'
         os.environ['GINGA_CHATTER'] = '4'
         if (not os.path.exists(self.outdir)):
             os.mkdir(self.outdir)
@@ -185,6 +186,16 @@ class GingaAsmBasicsTestCase(unittest.TestCase):
         if os.environ.get('GINGA_DEBUG') is not None: print(ret.stderr)  # DEBUG
         self.assertEqual(ret.returncode, 0, 'QDP run: stderr='+ret.stderr)
 
+        foutroot2b = outdir + '/' + 'outqdp_4_13b'
+        arcom_4_13b = [self.com_qdpb, fout, foutroot2b, "4", "13"]
+        retb = subprocess.run(arcom_4_13b, timeout=None,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, #stderr=subprocess.DEVNULL,
+                             #stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, #stderr=subprocess.DEVNULL,
+                             encoding='utf-8', shell=False)
+        if os.environ.get('GINGA_DEBUG') is not None: print(retb.stdout)  # DEBUG
+        if os.environ.get('GINGA_DEBUG') is not None: print(retb.stderr)  # DEBUG
+        self.assertEqual(retb.returncode, 0, 'QDP-b run: stderr='+retb.stderr)
+
         # Summed channels (Default)
         foutroot8 = outdir + '/' + 'outqdp_def'
         arcom_def = [self.com_qdp, fout, foutroot8]
@@ -193,12 +204,24 @@ class GingaAsmBasicsTestCase(unittest.TestCase):
                              encoding='utf-8', shell=False)
         self.assertEqual(ret.returncode, 0, 'QDP run: stderr='+ret.stderr)
 
+        foutroot8b = outdir + '/' + 'outqdp_defb'  # asm2qdpindy
+        arcom_defb = [self.com_qdpb, fout, foutroot8b]
+        retb = subprocess.run(arcom_defb, timeout=None,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, #stderr=subprocess.DEVNULL,
+                             encoding='utf-8', shell=False)
+        self.assertEqual(retb.returncode, 0, f'QDP run-b: com={arcom_defb} stderr='+retb.stderr)
+
         # Get QDP and FITS values
         row = 110 # for CH13
         arqdprow2 = qdp_data(foutroot2+'.qdp', row)
         if os.environ.get('GINGA_DEBUG') is not None: print('DEBUG-py3:', arqdprow2 )  # DEBUG
         y21ch13_qdp     = arqdprow2[4] # 2nd detector, 2nd band (CH13 (from CH00))
         y21ch13_qdp_all = arqdprow2    # 2nd detector
+
+        arqdprow2b = qdp_data(foutroot2b+'.qdp', row)  # asm2qdpindy
+        if os.environ.get('GINGA_DEBUG') is not None: print('DEBUG-py3b:', arqdprow2b )  # DEBUG
+        y21ch13_qdpb    = arqdprow2b[4] # 2nd detector, 2nd band (CH13 (from CH00))
+        y21ch13_qdp_allb= arqdprow2b    # 2nd detector
 
         row = 87 # for CH04
         arqdprow2 = qdp_data(foutroot2+'.qdp', row)
@@ -210,6 +233,10 @@ class GingaAsmBasicsTestCase(unittest.TestCase):
         arqdprow8 = qdp_data(foutroot8+'.qdp', row)
         y21ch08_15_qdp     = arqdprow8[4] # 2nd detector, 2nd band (CH08-15)
         y21ch08_15_qdp_all = arqdprow8    # 2nd detector
+
+        arqdprow8b= qdp_data(foutroot8b+'.qdp', row)
+        y21ch08_15_qdpb    = arqdprow8b[4] # 2nd detector, 2nd band (CH08-15)
+        y21ch08_15_qdp_allb= arqdprow8b    # 2nd detector
 
         row = 87 # for CH00-07
         arqdprow8 = qdp_data(foutroot8+'.qdp', row)
@@ -249,6 +276,8 @@ class GingaAsmBasicsTestCase(unittest.TestCase):
         self.assertEqual(y21ch08_15_fits, 7)
         self.assertEqual(y13ch04_fits, '2')   # ROW=87:           CH= 0       4     7
         self.assertEqual(y13ch00_07_fits, 4)  # 4.727904017105326E+04 0 0 1 1 2 0 0 0
+        self.assertEqual(y21ch13_qdpb,y21ch13_fits, 'QDPbY21CH13==3: Command: '+' '.join(arcom_4_13b)+"\n> "+' '.join(y21ch13_qdp_allb))
+        self.assertEqual(int(y21ch08_15_qdpb),y21ch08_15_fits, 'QDPbY21CH08_15: Command: '+' '.join(arcom_defb))
         self.assertEqual(y21ch13_qdp, y21ch13_fits, 'QDP Y21CH13==3: Command: '+' '.join(arcom_4_13)+"\n> "+' '.join(y21ch13_qdp_all))
         self.assertEqual(int(y21ch08_15_qdp), y21ch08_15_fits, 'QDP Y21CH08_15: Command: '+' '.join(arcom_def))
         self.assertEqual(y13ch04_qdp, y13ch04_fits, 'QDP Y13CH04==2: Command: '+' '.join(arcom_4_13)+"\n> "+' '.join(y13ch04_qdp_all))

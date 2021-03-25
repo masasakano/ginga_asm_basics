@@ -1686,28 +1686,43 @@ if (ittype > nsiz) call err_exit_play_safe()
   logical function IS_DEBUG() result(ret)
     character(len=1024) :: env_debug
     integer :: status
-    integer, save :: prev_result = -99
 
-    ! To avoid repeatedly accessing the system to get the environmental variable.
-    if (prev_result .ge. 0) then  ! This IF-statment is redundant (but is left for readability).
-      select case(prev_result)
-      case(0)
-        ret = .false.
-        return
-      case(1)
-        ret = .true.
-        return
-      end select
-    end if
-        
     call GET_ENVIRONMENT_VARIABLE('GINGA_DEBUG', env_debug, STATUS=status)
-    if ((status == 1) .or. (trim(env_debug) == 'false') .or. (trim(env_debug) == 'no')) then  ! 1 for non-existent, 2 for environment var. not-supported by the system
+    if ((status == 1) .or. (status == 2)) then  ! 1 for non-existent, 2 for environment var. not-supported by the system
       ret = .false.
-      prev_result = 0
+    else if ((trim(env_debug) == 'false') .or. (trim(env_debug) == 'no')) then
+      ret = .false.
     else
       ret = .true.
-      prev_result = 1
     end if
   end function IS_DEBUG
+
+  !! Returns true if the environmental variable DEBUG is set and NOT 'false' or 'no'.
+  !logical function IS_DEBUG_ORIG() result(ret)
+  !  character(len=1024) :: env_debug
+  !  integer :: status
+  !  integer, save :: prev_result = -99
+
+  !  ! To avoid repeatedly accessing the system to get the environmental variable.
+  !  if (prev_result .ge. 0) then  ! This IF-statment is redundant (but is left for readability).
+  !    select case(prev_result)
+  !    case(0)
+  !      ret = .false.
+  !      return
+  !    case(1)
+  !      ret = .true.
+  !      return
+  !    end select
+  !  end if
+  !      
+  !  call GET_ENVIRONMENT_VARIABLE('GINGA_DEBUG', env_debug, STATUS=status)
+  !  if ((status == 1) .or. (trim(env_debug) == 'false') .or. (trim(env_debug) == 'no')) then  ! 1 for non-existent, 2 for environment var. not-supported by the system
+  !    ret = .false.
+  !    prev_result = 0
+  !  else
+  !    ret = .true.
+  !    prev_result = 1
+  !  end if
+  !end function IS_DEBUG_ORIG
 end module asm_fits_common
 

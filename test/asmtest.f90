@@ -507,10 +507,12 @@ contains
     call read_telemetry(DEF_FNAME_TELEMETRY2, tfhead, headers, telems)
     telm_rows = get_telem_raws2types(headers, telems)
     call add_mjd2telem(tfhead, telm_rows)
+if (IS_DEBUG()) then
 call dump_asm_telem_row(telm_rows(1))  ! DEBUG
 call dump_asm_telem_row(telm_rows(2))  ! DEBUG
 call dump_asm_telem_row(telm_rows(SF2F4))  ! =68(F4)  for DEBUG
 call dump_asm_telem_row(telm_rows(SF2F15)) ! =79(F15) for DEBUG
+end if
 
     ! Test data of transition from the end of a year to the next.
     tfhead2%DATE__OBS%val   = '1988-12-31T23:59:56.1230'
@@ -621,8 +623,10 @@ call dump_asm_telem_row(telm_rows(SF2F15)) ! =79(F15) for DEBUG
 
     frfrows = get_frf_types(DEF_FNAME_FRF)
     !print *, 'DEBUG: size(frfrows)=', size(frfrows)
+if (IS_DEBUG()) then    
     call dump_asm_frfrow(frfrows(1))
     call dump_asm_frfrow(frfrows(2))
+end if
 
     ress = [ &
         assert_equal(  27,       frfrows(2)%stime(3),    subname, 'for STIME(DAY) for i=2') &
@@ -730,7 +734,7 @@ contains
     ! Get the FRF
     call mk_frf_rows(DEF_FNAME_FRF, frfhead, frfrows)
 
-print *, 'DEBUG:780: size(frfrows)=',size(frfrows), ' size(trows)=',size(trows)
+if (IS_DEBUG()) print *, 'DEBUG:780: size(frfrows)=',size(frfrows), ' size(trows)=',size(trows)
     !--- get initialized ASM_sfrows (for relation)
     relrows0 = get_ams_sfrow_init(trows)
 
@@ -753,7 +757,7 @@ print *, 'DEBUG:780: size(frfrows)=',size(frfrows), ' size(trows)=',size(trows)
     ! Prepartion of messages for the tests with relrows0
     j=3
     write(msg(j), '("(size(trows)=(",i5,") > size(relrows0)=(",i5,"))")') size(trows), size(relrows0)
-print *, 'DEBUG794: size(relrows0)=', trim(msg(j))
+if (IS_DEBUG()) print *, 'DEBUG794: size(relrows0)=', trim(msg(j))
     j=4
     if (any(relrows0%nframes < 0)) tfs(j) = .true.  ! Should be false.
     !if (all(relrows0%nframes > 0)) tfs(j) = .true. ! Should be true. (Equivalent to the above.
@@ -778,7 +782,7 @@ print *, 'DEBUG794: size(relrows0)=', trim(msg(j))
     !j=8
     !write(msg(j), '("(size(trows)=(",i5,") > size(relrows)=(",i5,")")') size(trows), size(relrows)
 
-print *, 'DEBUG:135: update'
+if (IS_DEBUG()) print *, 'DEBUG:135: update'
     !call update_asm_sfrow_modes(trows, relrows, skip_validate=.true.)
     call update_asm_sfrow_modes(trows, relrows)
 
@@ -791,11 +795,10 @@ print *, 'DEBUG:135: update'
     if (allocated(ar_strs_stats)) deallocate(ar_strs_stats)
  
     !------------ Run
-print *,'DEBUG:123:start'
+if (IS_DEBUG()) print *,'DEBUG:123:start'
 call write_tmp_fits(DEF_FNAME_OUT, status)
-print *,'DEBUG:124:start'
     !call write_asm_fits(trim(DEF_FNAME_OUT), tfhead, trows, frfrows, relrows, status)
-print *,'DEBUG:888:end writing'
+if (IS_DEBUG()) print *,'DEBUG:888:end writing'
     !------------
 
     ress = [ &
@@ -824,11 +827,13 @@ print *,'DEBUG:888:end writing'
     end do
     call print_teststats(subname, TOT_NTESTS)
 
+if (IS_DEBUG()) then
     do j=1, 3 !size(relrows)
 !do j=1, size(relrows)
       call dump_asm_sfrow(relrows(j), irow=j)
     end do
     call dump_asm_sfrow(get_sfrow_from_telem_row_index(79, relrows))
+end if
 
     deallocate(headers)
     deallocate(telems)
@@ -866,7 +871,7 @@ if (.true.) then
   status = status + run_calc_rows_asmdats_telem()
 
 else
-print *, 'DEBUG997: after run_test_get_telem_raws2types()'  ! Without this, SEGfault...
+if (IS_DEBUG()) print *, 'DEBUG997: after run_test_get_telem_raws2types()'  ! Without this, SEGfault...
   status = status + run_add_mjd2telem()
 end if
   if (status .ne. 0) then

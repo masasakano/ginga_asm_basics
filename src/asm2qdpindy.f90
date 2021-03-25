@@ -1,14 +1,14 @@
-program asm2qdp
+program asm2qdpindy
 
   use iso_fortran_env, only : stderr=>ERROR_UNIT   
 
-  use err_exit
+  !use err_exit
   use fort_util
-  use asm_fits_common
-  use asm_aux
-  use asm_read_telemetry
-  use asm_fitsout
-  ! use asm_read_evt
+  !use asm_fits_common
+  !use asm_aux
+  ! use asm_read_telemetry
+  ! use asm_fitsout
+  use asm_read_evt
 
   implicit none
 
@@ -22,18 +22,24 @@ program asm2qdp
   integer, dimension(DefNChans, DefNBands) :: chans  ! ((Low,High), i-th-band)
 
   character(len=1024) :: arg, comname = ''
-  type(t_argv), dimension(:), allocatable :: allargv
   character(len=255) :: env_ginga_chatter
   integer :: chatter = -99  ! read only once
   !type(t_argv), dimension(3) :: argv
   !argv = [t_argv(key='telemetry'), t_argv(key='FRF'), t_argv(key='outfile')] 
+  
 
-  !! USAGE: ./asm2qdp ../test/test_output/outmain3.fits ~/scratch/outqdp_direct_4_13 4 13
+  ! For command-line arguments --------------- from fits_common
+  type t_argv
+    character(len=LEN_READABLE_KEY) :: key;
+    character(len=LEN_T_ARGV) :: val = '';
+  end type t_argv
+
+  type(t_argv), dimension(:), allocatable :: allargv
+  !! USAGE: ./asm2qdpindy ../test/test_output/outmain3.fits ~/scratch/outqdp_direct_4_13 4 13
 
   integer :: funit, status = -999
   call FTGIOU(funit, status)
 if (IS_DEBUG()) print *,'DEBUG:001: funit=',funit,' status=',trim(ladjusted_int(status))
-  if (funit == 50) call FTFIOU(funit, status)
 
   !-- Handle the command-line arguments.
 
@@ -83,7 +89,7 @@ if (IS_DEBUG()) print *,'DEBUG:003: size(allargv)=',size(allargv)
     end select
   end do
 
-  if (3 < chatter) call dump_all_argv(allargv) ! DEBUG and for information
+!  if (3 < chatter) call dump_all_argv(allargv) ! DEBUG and for information
 
   if (istart_main == -1) then
     n_mainargs = size(allargv)
@@ -103,22 +109,27 @@ if (IS_DEBUG()) print *,'DEBUG:024: istart_main=',istart_main, ' n_mainargs=',n_
     chans(1, 2) = 8  ! Default: 08-15 ch
     chans(2, 2) = 15
   case(4)
-    !read(trim(get_val_from_key('arg_ch1', allargv)), '(I2)') i
-    chans(:, 1) = get_int_from_key('arg_ch1', allargv)
-    !read(trim(get_val_from_key('arg_ch2', allargv)), '(I2)') i
-    chans(:, 2) = get_int_from_key('arg_ch2', allargv)
+read(allargv(size(allargv)-1)%val, '(I2)') i
+chans(:, 1) = i
+    !chans(:, 1) = get_int_from_key('arg_ch1', allargv)
+read(allargv(size(allargv))%val, '(I2)') i
+chans(:, 2) = i
+    !chans(:, 2) = get_int_from_key('arg_ch2', allargv)
   case default
     call err_exit_play_safe() ! should never happen
   end select
   
   !---------------- MAIN ------------------
     
-if (IS_DEBUG()) print *,'DEBUG:992: starting... chans=',chans, ' asmfits=', trim(get_val_from_key('asmfits', allargv))
-  !call read_asmevt_write_qdp(get_val_from_key('asmfits', allargv) &  ! in asm_read_evt.f90
-  call read_asm_write_qdp(get_val_from_key('asmfits', allargv) &
-                        , get_val_from_key('outfile', allargv), chans)
+!if (IS_DEBUG()) print *,'DEBUG:992: starting... chans=',chans, ' asmfits=', trim(get_val_from_key('asmfits', allargv))
+if (IS_DEBUG()) print *,'DEBUG:992: starting... chans=',chans, ' asmfits=', trim(allargv(istart_main)%val) &
+    , ' outroot=', trim(allargv(istart_main+1)%val)
+  !call read_asmevt_write_qdp(get_val_from_key('asmfits', allargv) &
+  !                      , get_val_from_key('outfile', allargv), chans)
+call read_asmevt_write_qdp(allargv(istart_main)%val &
+                      , allargv(istart_main+1)%val, chans)
 
   if (allocated(allargv)) deallocate(allargv)
-end program asm2qdp
+end program asm2qdpindy
 
 

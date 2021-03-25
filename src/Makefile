@@ -26,7 +26,7 @@ MACOPT = LD="gfortran -g" CC="${GCC} -g" FC="gfortran -g -c -fno-second-undersco
 
 INSTALL_DIR = ../bin
 
-ALL = asmdump asmmkevt asmtelemetryout asm2qdp mjd2date date2mjd
+ALL = asmdump asmmkevt asmtelemetryout asm2qdp asm2qdpindy mjd2date date2mjd
 
 # ALLS = make_sf_list.pl
 
@@ -51,6 +51,9 @@ asm_read_telemetry.o asm_read_telemetry.mod: asm_read_telemetry.f90 fort_util.o 
 asm_fitsout.o asm_fitsout.mod: asm_fitsout.f90 fort_util.o err_exit.o asm_fits_common.o asm_aux.o
 	${FC} ${FFLAGS} -c -o asm_fitsout.o asm_fitsout.f90
 
+asm_read_evt.o asm_read_evt.mod: asm_read_evt.f90 fort_util.o err_exit.o asm_fits_common.o asm_aux.o
+	${FC} ${FFLAGS} -c -o asm_read_evt.o asm_read_evt.f90
+
 #GINGA_FRFREAD_OBJ = ../../ginga_tools/v1.1/src/frfread.o ${GINGA_TOOLS_DIR}/getoa2.o \
 
 GINGA_FRFREAD_OBJ = ../../ginga_tools/v1.1/src/frfread.o ../../ginga_tools/v1.1/src/getoa2.o \
@@ -62,13 +65,21 @@ ASMDUMP_OBJ = err_exit.o fort_util.o \
 #        frfread.o getoa2.o cnven.o mjd.o srcarray.o\
 #        satpn3.o orbit.o recpol_new.o
 
+ASM2QDP_OBJ = err_exit.o fort_util.o \
+        asm_fits_common.o asm_aux.o asm_fitsout.o # asm_read_evt.o
+
 mjd2date.o: ../../ginga_tools/v1.1/src/mjd.o fort_util.o err_exit.o asm_fits_common.o mjd2date.f90
 	${FC} ${FFLAGS} -c -o $@ mjd2date.f90 ${LINKLIB}
 
 date2mjd.o: ../../ginga_tools/v1.1/src/mjd.o fort_util.o err_exit.o asm_fits_common.o date2mjd.f90
 	${FC} ${FFLAGS} -c -o $@ date2mjd.f90 ${LINKLIB}
 
-asm2qdp.o: ${ASMDUMP_OBJ} asm2qdp.f90
+asm2qdpindy.o: asm_read_evt.o asm2qdpindy.f90 fort_util.o err_exit.o
+	${FC} ${FFLAGS} -c -o $@ asm2qdpindy.f90 ${LINKLIB}
+
+#asm2qdp.o: ${ASMDUMP_OBJ} asm2qdp.f90
+#	${FC} ${FFLAGS} -c -o $@ asm2qdp.f90 ${LINKLIB}
+asm2qdp.o: ${ASM2QDP_OBJ} asm2qdp.f90
 	${FC} ${FFLAGS} -c -o $@ asm2qdp.f90 ${LINKLIB}
 
 asmtelemetryout.o: ${ASMDUMP_OBJ} asmtelemetryout.f90
@@ -86,8 +97,13 @@ mjd2date: ../../ginga_tools/v1.1/src/mjd.o fort_util.o err_exit.o asm_fits_commo
 date2mjd: ../../ginga_tools/v1.1/src/mjd.o fort_util.o err_exit.o asm_fits_common.o date2mjd.o
 	${LD} -o date2mjd date2mjd.o ../../ginga_tools/v1.1/src/mjd.o fort_util.o err_exit.o asm_fits_common.o ${LINKLIB}
 
-asm2qdp: ${GINGA_FRFREAD_OBJ} ${ASMDUMP_OBJ} asm2qdp.o
-	${LD} -o asm2qdp asm2qdp.o ${GINGA_FRFREAD_OBJ} ${ASMDUMP_OBJ} ${LINKLIB}
+asm2qdpindy: ${GINGA_FRFREAD_OBJ} asm_read_evt.o asm2qdpindy.o fort_util.o err_exit.o
+	${LD} -o asm2qdpindy asm2qdpindy.o ${GINGA_FRFREAD_OBJ} asm_read_evt.o fort_util.o err_exit.o ${LINKLIB}
+
+#asm2qdp: ${GINGA_FRFREAD_OBJ} ${ASMDUMP_OBJ} asm2qdp.o
+#	${LD} -o asm2qdp asm2qdp.o ${GINGA_FRFREAD_OBJ} ${ASMDUMP_OBJ} ${LINKLIB}
+asm2qdp: ${GINGA_FRFREAD_OBJ} ${ASM2QDP_OBJ} asm2qdp.o
+	${LD} -o asm2qdp asm2qdp.o ${GINGA_FRFREAD_OBJ} ${ASM2QDP_OBJ} ${LINKLIB}
 
 asmtelemetryout: ${GINGA_FRFREAD_OBJ} ${ASMDUMP_OBJ} asmtelemetryout.o
 	${LD} -o asmtelemetryout asmtelemetryout.o ${GINGA_FRFREAD_OBJ} ${ASMDUMP_OBJ} ${LINKLIB}
