@@ -276,6 +276,19 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
 
 !print *,'DEBUG:390: get-init'
     do irowr=1, size(retrows)
+      ! Full 64 frames do not exist in Telemetry (This SHOULD have been already detected with "lostf")
+      if (retrows(irowr)%nframes < NFRAMES_PER_SF) then ! defined in asm_fits_common
+        retrows(irowr)%is_valid = .false.
+        retrows(irowr)%reason_invalid = get_reason_invalid('tel64', retrows(irowr)%nframes) ! defined in asm_fits_common
+        !write(retrows(irowr)%reason_invalid, '("nFrames in Telemetry ", I2, " < ", I2)') retrows(irowr)%nframes, NFRAMES_PER_SF
+        cycle
+      else if (retrows(irowr)%nframes > NFRAMES_PER_SF) then ! should never happen.
+        write(msg, '("nFrames in Telemetry (row=", I6, "): " I2, " > ", I2, ".")') &
+           irowr, retrows(irowr)%nframes, NFRAMES_PER_SF
+        call err_exit_play_safe(msg)
+        ! stop 1      ! redundant. Anyway not yet standard? (works for gfortran?)
+      end if
+
       ! Gets the 32nd frame (=64/2, where 64 frames/SF), as its time is the mjds in FRF.
       irowt = get_telem_row_index_from_fr(NFRAMES_PER_SF/2, trows, retrows(irowr)%irowt, retrows(irowr)%nframes) ! defined in asm_fits_common
 
@@ -309,19 +322,6 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
         retrows(irowr)%reason_invalid = get_reason_invalid('lostf', retrows(irowr)%frf%lostf) ! defined in asm_fits_common
         !write(retrows(irowr)%reason_invalid, '("lostf=", I2, " (FRF) > 0")') retrows(irowr)%lostf
         cycle
-      end if
-
-      ! Full 64 frames do not exist in Telemetry (This SHOULD have been already detected with "lostf")
-      if (retrows(irowr)%nframes < NFRAMES_PER_SF) then ! defined in asm_fits_common
-        retrows(irowr)%is_valid = .false.
-        retrows(irowr)%reason_invalid = get_reason_invalid('tel64', retrows(irowr)%nframes) ! defined in asm_fits_common
-        !write(retrows(irowr)%reason_invalid, '("nFrames in Telemetry ", I2, " < ", I2)') retrows(irowr)%nframes, NFRAMES_PER_SF
-        cycle
-      else if (retrows(irowr)%nframes > NFRAMES_PER_SF) then ! should never happen.
-        write(msg, '("nFrames in Telemetry (row=", I6, "): " I2, " > ", I2, ".")') &
-           irowr, retrows(irowr)%nframes, NFRAMES_PER_SF
-        call err_exit_play_safe(msg)
-        ! stop 1      ! redundant. Anyway not yet standard? (works for gfortran?)
       end if
     end do
   end function get_asm_sfrow

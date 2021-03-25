@@ -50,8 +50,10 @@ class GingaAsmBasicsTestCase(unittest.TestCase):
     def setUp(self):
         self.outdir = 'test_output'
         self.smpldir = '../samples'
-        self.f_tel = self.smpldir + '/' + 'ginga_sirius_P198804280220.fits.gz'
-        self.f_frf = self.smpldir + '/' + 'FR880428.S0220.fits.gz'
+        self.f_tel    = self.smpldir + '/' + 'ginga_sirius_P198804280220.fits.gz'
+        self.f_frf    = self.smpldir + '/' + 'FR880428.S0220.fits.gz'
+        self.f_tel_r1 = self.smpldir + '/' + 'ginga_sirius_R198703260412.fits.gz' # REAL data, not Stored
+        self.f_frf_r1 = self.smpldir + '/' + 'FR870327.R0412.fits.gz' # REAL data, not Stored
         self.com_main = '../src/asmmkevt'
         self.com_sub  = '../src/asmtelemetryout'
         self.com_qdp  = '../src/asm2qdp'
@@ -70,6 +72,58 @@ class GingaAsmBasicsTestCase(unittest.TestCase):
                 os.unlink(self.outdir+'/'+fname)
             os.rmdir(self.outdir)
 
+    # Returns the number of the cases "less than 64 Telemetry nFrames"
+    # Ideal string:  0: less than 64 Telemetry nFrames
+    #   (The string is defined in INVALID_FMT in asm_fits_common.f90)
+    #
+    # If the input does not include "Processing Statistics", this raises an exception/error.
+    @staticmethod
+    def get_num_errs_tel64(strin):
+        mat = re.search(r'(\d+)\s*:\s* less than 64 Telemetry nFrames', strin, flags=re.IGNORECASE)
+        return(int(mat[1]))
+
+    # Returns the tuple of (num_warnings, num_errors)
+    # Ideal string: **** Verification found 0 warning(s) and 0 error(s). ****
+    #
+    @staticmethod
+    def get_num_warn_err_fverify(strin):
+        s = re.sub(r'\n$', '', strin).split("\n")[-1]
+        mat = re.search(r'found\s+(\d+)\s+warn.+(\d+)\s+error', s, flags=re.IGNORECASE)
+        return(int(mat[1]), int(mat[2])) 
+
+    # Assert with fverify (no warnings, no errors)
+    def assert_fverify(self, strin, errin, fname):
+        msg = f'fverify({fname}):STDERR: '+errin
+        self.assertEqual(self.get_num_warn_err_fverify(strin), (0,0), msg)
+
+    def test_main_r1(self):
+        # Creates a FITS file for a set of REAL data
+        fout = self.outdir + '/' + 'outmain_r1.fits'
+        arcom = [self.com_main, self.f_tel_r1, self.f_frf_r1, fout]
+        ret = subprocess.run(arcom, timeout=None,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, #stderr=subprocess.DEVNULL,
+                             encoding='utf-8', shell=False)
+        # print('DEBUG:r1: com='+repr(arcom))
+        self.assertEqual(ret.returncode, 0, 'Main run: stderr='+ret.stderr)
+        self.assertGreater(self.get_num_errs_tel64(ret.stdout), 0, 'numError(tel64) should be >0.')
+
+        # fverify
+        ret = subprocess.run(['fverify', fout], timeout=None,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             encoding='utf-8', shell=False)
+        self.assertEqual(ret.returncode, 0)
+        self.assert_fverify(ret.stdout, ret.stderr, fout)
+
+        # fstruct (check if the columns are created)
+        ret = subprocess.run(['fstruct', fout], timeout=None,
+                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                             encoding='utf-8', shell=False)
+            # => 1  BINTABLE ASM table       8     290(124) 5056               0    1
+        mat = re.search(r'\n +1 +BINTABLE [^\d]+[\d]+ +([\d]+)\(([\d]+)\) +([\d]+)', ret.stdout, flags=re.IGNORECASE)
+        self.assertGreater(int(mat[2]), 100)  # more than 100 columns
+        self.assertEqual(  int(mat[3]), 0)    # 0 rows
+
+
     def test_main(self):
         # Creates a FITS file
         fout = self.outdir + '/' + 'outmain1.fits'
@@ -80,9 +134,10 @@ class GingaAsmBasicsTestCase(unittest.TestCase):
 
         # fverify
         ret = subprocess.run(['fverify', fout], timeout=None,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              encoding='utf-8', shell=False)
         self.assertEqual(ret.returncode, 0)
+        self.assert_fverify(ret.stdout, ret.stderr, fout)
 
         # fstruct (check if the columns are created)
         ret = subprocess.run(['fstruct', fout], timeout=None,
