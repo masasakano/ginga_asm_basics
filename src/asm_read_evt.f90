@@ -1,4 +1,4 @@
-! Routines to read an ASM event FITS file
+! Routines to read an ASM event FITS file and output as QDP/PCO files
 !
 module asm_read_evt
   use err_exit
@@ -267,12 +267,15 @@ contains
   subroutine write_qdp(fname, outroot, chans, artime, outchans, status)
     implicit none
     integer, parameter :: MY_FUNIT = 62  ! arbitrary
-    real(dp8), parameter :: ys1 = 0.75, ys2 = 0.9+1/60.d0, yd1 = -(0.1+1/30.d0)  ! QDP Y-starting positions 1 and 2 and difference
+    character(len=*), parameter :: Fmt_MJD = 'E20.14'
+    !real(dp8), parameter :: ys1 = 0.75, ys2 = 0.9+1/60.d0, yd1 = -(0.1+1/30.d0)  ! QDP Y-starting positions 1 and 2 and difference
+    real(dp8), parameter :: ys1 = 0.78, ys2 = 0.93+1/60.d0, yd1 = -(0.1+1/30.d0)  ! QDP Y-starting positions 1 and 2 and difference
     character(len=*), intent(in) :: fname, outroot  ! fname for ASM.fits
     integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band) ! for displaying purpose only
     real(dp8), dimension(:), intent(in) :: artime
     integer(kind=ip2), dimension(:,:,:), intent(in) :: outchans ! (Row(channel-values), Detector(6), Band(Low(1)/High(2)))
     integer, intent(out), optional :: status
+    real(dp8) :: mjd_offset = UNDEF_DOUBLE  ! All Time is offset with this MJD value (n.b., the value of the first row is 0).
     character(len=2048) :: qdpfile, pcofile
     integer :: iy, idet, irow, iband, statustmp
     integer :: unit, colnum
@@ -280,6 +283,7 @@ contains
 
     qdpfile = trim(outroot)//'.qdp'
     pcofile = trim(outroot)//'.pco'
+    mjd_offset = artime(1)  ! The offset is the first row of artime (=Tstart in the ASM event file)
 
 !if (IS_DEBUG()) print *,'DEBUG:3142: out-beg sum=',sum(outchans(:,2,1))
     do iband=1,size(chans,2)
@@ -300,7 +304,8 @@ contains
 !if (IS_DEBUG()) print *,'DEBUG:3145: size1=',size(outchans,1),'sizes=',size(outchans, 2),' s3=',size(outchans, 3)
     ! QDP file
     open(UNIT=unit, file=qdpfile, IOSTAT=status, STATUS='UNKNOWN')  ! clobber=yes (i.e., overwrite, maybe)
-    write(unit, '("@",A)') trim(pcofile)
+    write(unit, '("@",A)') trim(basename(trim(pcofile)))
+    write(unit, '("! MJD-offset for Tstart = ",'//Fmt_MJD//')') mjd_offset
     write(unit, '("! Tstart ")', advance='no')
     iy = 1
     do idet=1, size(outchans, 2)
@@ -313,7 +318,7 @@ contains
 
 !if (IS_DEBUG()) print *,'DEBUG:3157: out-after sum=',sum(outchans(:,2,1))
     do irow=1, size(outchans, 1)
-      write(unit, '(E20.14)', advance='no') artime(irow)
+      write(unit, '('//Fmt_MJD//')', advance='no') artime(irow)-mjd_offset
       do idet=1, size(outchans, 2)
         do iband=1, size(outchans, 3)
           write(unit, '(" ",I4)', advance='no') outchans(irow, idet, iband)
@@ -326,7 +331,8 @@ contains
     ! PCO file
     open(UNIT=unit, file=pcofile, IOSTAT=status, STATUS='UNKNOWN')  ! clobber=yes (i.e., overwrite, maybe)
     write(unit, '("CSIZ  0.60")')
-    write(unit, '("LAB T ASM light curves (CH:",A,") of",A)') trim(join_chars(strchs, ', ')), trim(basename(fname))
+    write(unit, '("LAB T ASM light curves (CH:",A,") from MJD=",'//Fmt_MJD//')') &
+       trim(join_chars(strchs, ', ')), mjd_offset
     write(unit, '("LAB F ",A)') trim(basename(fname))
     !iy = 1
     do idet=1, size(outchans, 2)
@@ -342,16 +348,18 @@ contains
       do idet=1, size(outchans, 2)
         write(unit, '("win ",I2)') idet+1
         if (idet == 1) then
-          write(unit, '("LAB T ASM light curves (CH:",A,") of",A)') trim(join_chars(strchs, ', ')), trim(basename(fname))
+          write(unit, '("LAB T ASM light curves (CH:",A,") from MJD=",'//Fmt_MJD//')') &
+             trim(join_chars(strchs, ', ')), mjd_offset
           write(unit, '("LAB F ",A)') trim(basename(fname))
         end if
         write(unit, '("yplot ",I2," ",I2)') idet*2, idet*2+1
         write(unit, '("loc 0 ",F12.10," 1 ",F12.10)') ys1+(idet-1)*yd1, ys2+(idet-1)*yd1
-        write(unit, '("LAB Y Y"I1,"FW",I1)') mod(idet-1,2)+1, (idet-1)/2+1
+        write(unit, '("LAB Y Y",I1,"FW",I1)') mod(idet-1,2)+1, (idet-1)/2+1
+        write(unit, '("R Y",I1," -0.5 255.5")') idet+1
         if (idet .ne. size(outchans, 2)) write(unit, '("lab nx off")')
       end do
     end if
-    write(unit, '("LAB X Tstart")')
+    write(unit, '("LAB X Tstart-MJD(=",'//Fmt_MJD//',")") [day]') mjd_offset
     write(unit, '("R X")')
     
     close(UNIT=unit, IOSTAT=statustmp)

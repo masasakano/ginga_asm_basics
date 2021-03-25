@@ -52,6 +52,25 @@ You can view the options with
 
     asm2qdp -h
 
+## Example sequence of run with sample data ##
+
+Make sure all the HEADAS environmental variables are set and `src/Makefile` and `test/Makefile` have been edited to suit your environment.
+
+    % cd src/
+    % make
+    % make test
+    % env GINGA_CHATTER=4 ./asmmkevt ../samples/ginga_sirius_P198804280220.fits.gz ../samples/FR880428.S0220.fits.gz /tmp/asmevt.fits
+    % env GINGA_CHATTER=4 ./asmtelemetryout ../samples/ginga_sirius_P198804280220.fits.gz ../samples/FR880428.S0220.fits.gz /tmp/asmtel.fits Tstart SFNum SFNTelem Fr6bits Mode_ASM Mode_PHA ModeSlew ModeSleM ModeSleP Status_C Status_S DP_C DP_S bitrate
+    % ./asm2qdp /tmp/asmevt.fits /tmp/asmqdp_def
+    % ./asm2qdp /tmp/asmevt.fits /tmp/asmqdp_4_13 4 13
+    %
+    % cd /tmp
+    % fplot /tmp/asmtel.fits+1 xparm=- yparm="Tstart SFNum Mode_ASM Mode_PHA ModeSlew ModeSleM ModeSleW" rows=- device=/xw
+    %
+    % qdp /tmp/asmqdp_def
+    %
+    % qdp /tmp/asmqdp_4_13 4 13
+
 ## Tests ##
 
 To run tests,
