@@ -40,7 +40,7 @@ program mjd2date
 
   !use err_exit       ! NOTE: this is required in asm_fits_common
   use fort_util
-  use asm_fits_common ! for dump_all_argv()
+  use asm_fits_common ! for type(t_argv), dump_all_argv()
 
   implicit none
 

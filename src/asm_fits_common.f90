@@ -4,38 +4,30 @@ module asm_fits_common
   use iso_fortran_env, only : stderr=>ERROR_UNIT
   use fort_util
   use err_exit
+  use asm_consts
   implicit none 
 
-  character(len=*), parameter, public :: ASM_BASICS_VERSION = '2021-03-25'
+  character(len=*), parameter, public :: ASM_BASICS_VERSION = '2021-03-26'
   integer, parameter :: SIZE_EMPTY_FITS_BYTES = 40320
   ! This value would change as soon as a FITS header keyword
   ! or table column is deleted or a new one is added in the output FITS by this package.
+  !
+  ! This value is estimated by running fverify OUTPUT_EVENT.fits
 
   integer, parameter, private :: dp  = kind(1.d0)
-  integer, parameter, public ::  dp8 = 8 ! FITS file REAL8
-  integer, parameter, public ::  ip4 = 4 ! "J" in FITSIO; FITS file INTEGER4
-  integer, parameter, public ::  ip2 = 2 ! "I" in FITSIO
-  integer, parameter :: n_all_fields = 10  ! Number of fields to read and output
-  integer, parameter, public :: max_fits_char = 68
+
   integer, parameter, public :: MAX_LEN_FKEY  = 8  ! FITS key maximum length of characters
-  integer, parameter, public :: nchar_extname = 8
   integer, parameter, public :: NFRAMES_PER_SF = 64  ! Number of Frames per SABU-Frame
-  integer, parameter, public :: NUM_INSTR = 6, NCHANS_PHA = 16, NCHANS_TIME = 8  ! Number of channels in each mode 
-  integer, parameter, public :: NBYTESPERCARD = 144
+  integer, parameter, public :: NBYTESFORHEADER = 16 ! Number of bytes of a telemetry header
+  integer, parameter, public :: NBYTESPERCARD = 144  ! Number of bytes of a telemetry row as in the telemetry FITS (16+128 bytes)
   integer, parameter, public :: NWORDS_MAIN = NUM_INSTR*NCHANS_PHA  ! Number of words (=bytes) of Main (mode-dependent) section in a frame: 96
   character(len=*), parameter, public :: tunit_main = 'count'
   integer, parameter, public :: ASM_STATUS_FN = 15; ! (First) Frame number; F15W65B1 ! (F32n+15, W65(Status)) Table 5.1.12, pp.213
   integer, parameter, public :: DIM_ACS_C = 3, DIM_ASM_C = 4;  ! Number of words for ACS and (each of the two) ASM in the common area in each telemetry frame
-  integer, parameter :: LEN_READABLE_KEY = 32  ! Char-length of maximum human-readable key name
   integer, parameter :: LEN_T_INVALID_FMT_KEY = 32
   integer, parameter :: LEN_PROC_STATS = 256
   integer, parameter :: LEN_T_ARGV = 1024
-  real(dp8),    parameter :: UNDEF_DOUBLE = -1024.0_dp8
-  real(dp8),    parameter :: UNDEF_REAL   = -1024.0_dp8  ! for backward compatibility (though the name suggests it to be for the standard REAL)
-  integer(ip4), parameter :: UNDEF_INT  = -999_ip4
-  integer(ip2), parameter :: UNDEF_INT2 = -999_ip2
-  character(len=*), parameter, private :: DEF_FITS_GINGA_ORIGIN = 'ISAS/JAXA'
-  character(len=*), parameter, private :: DEF_FITS_GINGA_CREATOR = 'ginga_asm_basics ver.'//ASM_BASICS_VERSION
+
   character(len=*), parameter :: OUTFTCOMMENT1 = 'Created by combining a Ginga telemetry file&
      & and corresponding FRF for the LAC.  However, the LAC FRFs usually lack the data in which&
      & the ASM-Mode is on.  Therefore, no meaningful Euler angles appear in the Table&
@@ -44,12 +36,13 @@ module asm_fits_common
   character(len=*), parameter :: OUTFTCOMMENT2 = 'See GETOAT() in the Ginga FRFREAD reference manual&
      & for the definitions of some of the header keyword parameters.'
 
-  character(len=max_fits_char), dimension(n_all_fields) :: &
-     tmtypes, tmcomms, tmforms, tmunits
-
+  character(len=*), parameter, private :: DEF_FITS_GINGA_ORIGIN = 'ISAS/JAXA'
+  character(len=*), parameter, private :: DEF_FITS_GINGA_CREATOR = 'ginga_asm_basics ver.'//ASM_BASICS_VERSION
   integer, private :: i
 
-  DATA tmtypes(1:2) / 'SF_NO2B', 'FRAME_NO' /
+  !--------------------------------------------
+  ! INTERFACEs
+  !--------------------------------------------
 
   interface get_onoff_enadis
     module procedure get_onoff_enadis_from_key, get_onoff_enadis_from_tf
@@ -82,14 +75,18 @@ module asm_fits_common
     module procedure get_ncols_colheads_frameunits, get_ncols_colheads_none
   end interface get_ncols_colheads
 
+  !--------------------------------------------
+  ! TYPEs (and related constants)
+  !--------------------------------------------
+
+  !-----------------------------------------
   ! For command-line arguments
   type t_argv
     character(len=LEN_READABLE_KEY) :: key;
     character(len=LEN_T_ARGV) :: val = '';
   end type t_argv
 
-  ! Number of the total frames of a Colheads
-
+  !-----------------------------------------
   ! Ginga Telemetry file word structure
   !
   ! It starts from zero (0): W0-W127
@@ -107,11 +104,13 @@ module asm_fits_common
   end type t_telem_word_from0
   type(t_telem_word_from0), parameter :: TELEM_WORD_FROM0 = t_telem_word_from0()
 
+  !-----------------------------------------
   ! type for (maybe first) frame and word and bit
   type t_frame_word_bit
     integer :: frame, word, bit;
   end type t_frame_word_bit
 
+  !-----------------------------------------
   ! Location infor for Frame, Word, and Bit
   !
   ! If "F8n+4 W66 B3", f_multi=8, f_offset=4, word=66, bit=3
@@ -128,6 +127,7 @@ module asm_fits_common
     character(len=1024) :: note = '';
   end type t_loc_fwb
 
+  !-----------------------------------------
   ! Ginga Telemetry info location
   !
   ! It starts from zero (0): B0-B7
@@ -167,6 +167,7 @@ module asm_fits_common
   end type t_telem_loc
   type(t_telem_loc), parameter :: TELEM_LOC = t_telem_loc()
 
+  !-----------------------------------------
   ! ASM Table as read from a Telemetry file; row-based, ie., each row constitutes 1 variable
   !
   ! NOTE: A byte must have been converted into Integer*4 with a proper filter
@@ -191,14 +192,14 @@ module asm_fits_common
 
     !--- Telemetry
     integer(kind=ip4) :: fi_w3;     ! W3(=FI) (Interim-Report Table 5.1.3, pp.201)
-       ! B0: SF 2 (SF = Sabu-frame; 4-frame cyclic)
+       ! B0: SF 2 (SF = Sabu-frame; 4-frame cyclic) / MSB (Most-significant bit)
        ! B1: SF 1 (SF = Sabu-frame; 4-frame cyclic)
        ! B2: F 32 (F = Frame; 64-frames per 1 SF)
        ! B3: F 16
        ! B4: F 8
        ! B5: F 4
        ! B6: F 2
-       ! B7: F 1
+       ! B7: F 1 / LSB (Least-significant bit)
     integer(kind=ip4) :: STAT_OBS = UNDEF_INT; ! W65(=Status)
     character(len=8) :: STAT_OBS_B8 = ''; ! String Bit expression of W65(=Status)
        ! F32n+10 W65(=Status) B3:  Slew360 Mode (is ON "1"? (unconfirmed))
@@ -230,13 +231,13 @@ module asm_fits_common
     integer(kind=ip4) :: sf_2bit;   ! 2-bit info of the SF in Telemetry
     integer(kind=ip4) :: fr_6bit;   ! Current frame number as recorded in Telemetry in 6 bits
     integer(kind=ip4) :: i_frame;   ! i-th frame in the current SF
-    !real(kind=dp8), dimension(3) :: eulers;   ! Not in the telemetry frame?
     integer(kind=ip4), dimension(DIM_ACS_C) :: acss;        ! acss = 3 bytes (W33-35)
     integer(kind=ip4), dimension(DIM_ASM_C) :: asm1_commons; ! AMS in the common area (W48-51) = 4 bytes
     integer(kind=ip4), dimension(DIM_ASM_C) :: asm2_commons; ! AMS in the common area (W112-115) = 4 bytes
     integer(kind=ip4), dimension(NWORDS_MAIN) :: asmdats; ! Main ASM data; Y[1-2]FW[1-3](ch[0-15]) for PHA mode, Y[1-2]FW[1-3][LH](ch[0-7]) for Time mode
   end type asm_telem_row
 
+  !-----------------------------------------
   ! ASM FRF; row-based, ie., each row constitutes 1 variable, and SF (sabu-frame) based.
   !
   ! NOTE: A byte must have been converted into Integer*4 with a proper filter
@@ -295,6 +296,7 @@ module asm_fits_common
                        ! NSAMPL=1 FOR BITRATE H,M ,  =4 FOR BITRATE L
   end type asm_frfrow
 
+  !-----------------------------------------
   ! Invalid reason type
   type t_invalid_fmt
     character(len=LEN_T_INVALID_FMT_KEY)   :: key;
@@ -315,12 +317,14 @@ module asm_fits_common
                                 , fmt='("ASM-mode is off")', nargs=0) &
      ]
 
+  !-----------------------------------------
   ! Invalid reason object to be used in asm_sfrow%reason_invalid
   type t_reason_invalid
     character(len=LEN_T_INVALID_FMT_KEY) :: key;
     character(len=max_fits_char) :: text = '';
   end type t_reason_invalid
 
+  !-----------------------------------------
   ! ASM SFs (Sabu-frames) row-based, ie., each row constitutes 1 variable, and SF (sabu-frame) based.
   !
   ! Used to match Telemetry and FRF.
@@ -353,61 +357,11 @@ module asm_fits_common
     integer(ip4) :: stat_hv2_b = UNDEF_INT; ! ENA/DIS for ASM-HV2 F15W65B5
     integer(ip4) :: stat_rbm_b = UNDEF_INT; ! ENA/DIS for ASM-RBM F15W65B6
     integer(ip4) :: stat_bdr_b = UNDEF_INT; ! ENA/DIS for ASM-BDR F15W65B7
-    !character(len=max_fits_char) :: stat_asm = ''; ! ON/OFF for ASM F15W65B1  ! (F32n+15, W65(Status)) Table 5.1.12, pp.213
-    !character(len=max_fits_char) :: stat_asa = ''; ! ON/OFF for ASM-A    F15W65B2
-    !character(len=max_fits_char) :: stat_amc = ''; ! ON/OFF for ASM-AMC  F15W65B3
-    !character(len=max_fits_char) :: stat_hv1 = ''; ! ENA/DIS for ASM-HV1 F15W65B4
-    !character(len=max_fits_char) :: stat_hv2 = ''; ! ENA/DIS for ASM-HV2 F15W65B5
-    !character(len=max_fits_char) :: stat_rbm = ''; ! ENA/DIS for ASM-RBM F15W65B6
-    !character(len=max_fits_char) :: stat_bdr = ''; ! ENA/DIS for ASM-BDR F15W65B7
-     integer(ip4) :: bitrate  = UNDEF_INT; ! [/s] Telemetry bit rate (F16W66) ! Taken from Telemetry as opposed to FRF
+    integer(ip4) :: bitrate  = UNDEF_INT; ! [/s] Telemetry bit rate (F16W66) ! Taken from Telemetry as opposed to FRF
   end type asm_sfrow
 
 
-  ! FITS output header
-  type asm_header
-    integer :: i_sframe, i_frame;
-    character(len=18) :: TITLE    = 'ASM extracted data';
-    character(len=5)  :: TELESCOP = 'Ginga';
-    character(len=3)  :: INSTRUME = 'ASM';
-    character(len=max_fits_char) :: FILENAME, date_obs;
-    real    :: tsttasmm, tendasmm, tstts360, tends360;
-    logical :: existdat = .true.;
-    real, dimension(3) :: euler_s, euler_e;
-    integer :: mode_dp;  ! 1/0 if ASM Mode is 'ON/OFF' (F4W66B3)
-    integer :: mode_asm; ! 1/0 if ASM-PHA/Time Mode    (F4W66B4), ignoring F56W66B4
-    character(len=max_fits_char) :: stat_asm, stat_asa, stat_amc;           ! ON/OFF
-    character(len=max_fits_char) :: stat_hv1, stat_hv2, stat_rbm, stat_bdr; ! ENA/DIS
-    integer :: bitrate;
-  end type asm_header
-
-  ! FITS output header comment
-  type t_asm_header_comment
-    character(len=max_fits_char) :: title = '', telescop = '', instrume = '';
-    character(len=17) :: date_obs = '[day] Observation date';
-    character(len=17) :: filename = 'Original filename';
-    character(len=22) :: tsttasmm = 'Start time of ASM Mode';
-    character(len=20) :: tendasmm = 'End time of ASM Mode';
-    character(len=26) :: tstts360 = 'Start time of Slew360 Mode (F32n+10 W65B3)(=Status)';
-    character(len=24) :: tends360 = 'End time of Slew360 Mode';
-    character(len=30) :: existdat = 'True if the file contains data';
-    character(len=37) :: fmt_euler_s  = '("[deg] Euler ", i1, " at the start")';
-    character(len=35) :: fmt_euler_e  = '("[deg] Euler ", i1, " at the end")';
-    character(len=35) :: mode_dp  = '1/0 if ASM Mode is ON/OFF (F4W66B3)';
-    character(len=34) :: mode_asm = '1/0 if ASM-PHA/Time Mode (F4W66B4)';
-    character(len=23) :: stat_asm = 'ON/OFF for ASM F15W65B1';  ! (F32n+15, W65(Status)) Table 5.1.12, pp.213
-    character(len=25) :: stat_asa = 'ON/OFF for ASM-A F15W65B2';
-    character(len=27) :: stat_amc = 'ON/OFF for ASM-AMC F15W65B3';
-    character(len=28) :: stat_hv1 = 'ENA/DIS for ASM-HV1 F15W65B4';
-    character(len=28) :: stat_hv2 = 'ENA/DIS for ASM-HV2 F15W65B5';
-    character(len=28) :: stat_rbm = 'ENA/DIS for ASM-RBM F15W65B6';
-    character(len=28) :: stat_bdr = 'ENA/DIS for ASM-BDR F15W65B7';
-    character(len=32) :: bitrate  = '[/s] Telemetry bit rate (F16W66)';
-  end type t_asm_header_comment
-
-  type(t_asm_header_comment), parameter :: asm_comm = t_asm_header_comment()
-
-
+  !-----------------------------------------
   ! Specification of the ASM Table Types in FITS
   type t_form_unit
     character(len=LEN_READABLE_KEY) :: key; ! key for relating this to others
@@ -423,6 +377,9 @@ module asm_fits_common
      ! note: I=Int*2, J=Int*4, D=Real*8
        t_form_unit(key='main',     root='',        form='1I', unit='count', comm='Main ASM data', dim=NWORDS_MAIN) & ! Special case: root should be explicitly specified when used. See function get_colheads()
      , t_form_unit(key='Tstart',   root='Tstart',  form='1D', unit='day', comm='Start datetime in MJD') &
+          ! NOTE of CAUTION: This parameter (Tstart) is separately defined
+          !   in COLNAME_TSTART in asm_read_evt.f90 - make sure it is consistent
+          !   with this parameter.
      , t_form_unit(key='Euler',    root='Euler',   form='1D', unit='deg', comm='Euler angle', dim=3) &
      , t_form_unit(key='SFNum',    root='SFNum',   form='1J',  comm='As defined in FRF if defined') &
      , t_form_unit(key='SFNTelem', root='SFNTelem',form='1J',  comm='SF number based on Telemetry alone') & ! %sfntelem 
@@ -454,6 +411,7 @@ module asm_fits_common
      , t_form_unit(key='bitrate',  root='bitrate', form='1I', comm='Telemetry bitrate info (F16W66)') &
      ]
 
+  !-----------------------------------------
   ! Each column header info of the ASM Table to output as a FITS (i.e., column-based)
   !
   ! 1. An array of this type represents the info of the output FITS table data.
@@ -496,6 +454,7 @@ module asm_fits_common
     !character(len=1)  :: fmt = 'L';
   end type fhead1tf
 
+  !-----------------------------------------
   type fits_header
     ! If the name contains '__', it should be replaced with '-' as the FITS header name.
     ! -- Telemetry FITS ------------
@@ -672,6 +631,7 @@ module asm_fits_common
 
 contains
 
+  !-----------------------------------------
   type(t_invalid_fmt) function get_invalid_fmt(key)
     character(len=*), intent(in) :: key
     integer :: i
@@ -687,6 +647,542 @@ contains
     write(stderr,'(A)') 'FATAL: Wrong key for get_invalid_fmt(): '//trim(key)
     call EXIT(1)  ! for gfortran, Lahey Fujitsu Fortran 95, etc
   end function get_invalid_fmt
+
+
+  !-----------------------------------------
+  ! Get the number associated with TTYPE in colhead, like 3 in TTYPEn='Euler3'
+  integer function get_colhead_type_num(colhead, name) result(iret)
+    type(t_asm_colhead), intent(in) :: colhead
+    character(len=*), intent(in) :: name ! for the prefix, like 'Euler'. Mandatory
+    integer :: status
+    character(len=max_fits_char) :: kwd
+    character(len=1024) :: usermsg
+
+    read(colhead%type, '(A'//trim(ladjusted_int(len_trim(name)))//',I3)', iostat=status) kwd, iret
+
+    if (trim(kwd) .ne. trim(name)) then
+      print *, 'ERROR(get_colhead_type_num): colhead is:'
+      call dump_type(colhead)
+      write(usermsg, '("Key is not Expected=",A," <=> ",A)') trim(kwd), trim(name)
+      call err_exit_play_safe(usermsg)
+    end if
+
+    if (status .ne. 0) then
+      ! Read (format?) error
+      print *, 'ERROR(get_colhead_type_num): colhead is:'
+      call dump_type(colhead)
+      write(usermsg, '("(get_colhead_type_num) Status is non-zero: ",I8)') status
+      call err_exit_with_msg(usermsg)
+    end if
+  end function get_colhead_type_num
+
+
+  !-----------------------------------------
+  ! Returns the object type(t_reason_invalid)
+  !
+  ! For the key, see the member 'key' of the parameter INVALID_FMT
+  ! e.g., (no_frf|tel64|lostf|asmswoff|asmmodeoff)
+  function get_reason_invalid(key, i1, i2) result(tret)
+    character(len=*), intent(in) :: key
+    integer, intent(in), optional :: i1, i2
+    type(t_reason_invalid) :: tret
+
+    type(t_invalid_fmt) :: invalid_fmt
+    character(len=max_fits_char) :: rettext
+
+    invalid_fmt = get_invalid_fmt(key)
+    if      (invalid_fmt%nargs == 0) then
+      write(rettext, invalid_fmt%fmt)
+    else if (invalid_fmt%nargs == 1) then
+      write(rettext, invalid_fmt%fmt) i1
+    else if (invalid_fmt%nargs == 2) then
+      write(rettext, invalid_fmt%fmt) i2
+    else
+      write(stderr,'(A)') 'Unsupported. Contact the code developer.'
+      call EXIT(1)  ! for gfortran, Lahey Fujitsu Fortran 95, etc
+    end if
+    tret = t_reason_invalid(key=key, text=rettext)
+  end function get_reason_invalid
+
+  !-----------------------------------------
+  ! Returns frame-row-index of type(asm_telem_row) that has the specified frame number like F32,
+  ! with the search starting from a specified row number (istart; counted from 1).
+  !
+  ! If not found, a negative value is returned.
+  ! NOTE: (Fortran Array index (from 1))
+  !
+  function get_telem_row_index_from_fr(frn, trows, istart, nrows) result(retrow)
+    integer, intent(in) :: frn    ! Frame number to search for, eg., F32
+    type(asm_telem_row), dimension(:), intent(in) :: trows
+    integer, intent(in) :: istart ! Start row (in trows) for search
+    integer, intent(in) :: nrows  ! Number of rows to search from istart
+    integer :: retrow ! to return
+    integer :: irow
+
+    retrow = UNDEF_INT
+    do irow=istart, istart+nrows-1
+      if (frn == trows(irow)%fr_6bit) then
+        retrow = irow
+        return
+      end if
+    end do
+  end function get_telem_row_index_from_fr
+
+  !-----------------------------------------
+  ! (almost) Inverse of get_telem_row_index_from_fr
+  !
+  ! Find a SF-row object in sfrows from Telemetry-FITS row-number
+  !
+  ! If not found, the returned retsfrow%irowt is negative (or possibly zero, if specification changes).
+  function get_sfrow_from_telem_row_index(in_rowt, sfrows) result(retsfrow)
+    integer, intent(in) :: in_rowt    ! Row number of Telemetry
+    type(asm_sfrow), dimension(:), allocatable, intent(in) :: sfrows
+    type(asm_sfrow) :: retsfrow ! to return
+    integer :: irow
+
+    do irow=1, size(sfrows)
+      if ((sfrows(irow)%irowt .le. in_rowt) .and. &
+          (in_rowt .le. sfrows(irow)%irowt + sfrows(irow)%nframes)) then
+        retsfrow = sfrows(irow)
+        return
+      end if
+    end do
+  end function get_sfrow_from_telem_row_index
+
+  !-----------------------------------------
+  ! Returns the word number in Telemetry (128-words)
+  !
+  ! In default it counts from 0 (zero), namely W0 to W127,
+  ! unless optional argument from1 is given and .true.,
+  ! in which case it starts from 1 like a Fortran Array.
+  !
+  ! name is (fi|dp|status|pi_mon), so far, and in lower-cases ONLY.
+  integer function w_no(name, from1) result(iret)
+    character(len=*), intent(in) :: name
+    logical, intent(in), optional :: from1
+    integer :: add1
+
+    if (present(from1) .and. from1) then
+      add1 = 1
+    else
+      add1 = 0
+    end if
+
+    select case(trim(name))
+    case('fi')
+      iret = TELEM_WORD_FROM0%fi
+    case('dp')
+      iret = TELEM_WORD_FROM0%dp
+    case('status')
+      iret = TELEM_WORD_FROM0%status
+    case('pi_mon')
+      iret = TELEM_WORD_FROM0%pi_mon
+    case('acss')  ! The first word
+      iret = TELEM_WORD_FROM0%acss
+    case('asm1_commons')  ! The first word
+      iret = TELEM_WORD_FROM0%asm1_commons
+    case('asm2_commons')  ! The first word
+      iret = TELEM_WORD_FROM0%asm2_commons
+    case default
+      iret = UNDEF_INT
+    end select
+
+    iret = iret + add1
+  end function w_no
+
+
+  !-----------------------------------------
+  ! Returns MJD of starting epoch of the first frame of a SF, based on sfrow/relrow
+  real(kind=dp8) function sfrow2mjd(sfrow, trows) result(retmjd)
+    type(asm_sfrow), intent(in) :: sfrow
+    type(asm_telem_row), dimension(:), intent(in) :: trows
+
+    retmjd = trows(sfrow%irowt)%mjd
+  end function sfrow2mjd
+
+
+  !-----------------------------------------
+  ! Calculates the asmdats and telemetry row numbers for the first ASM data in the given 16-byte row number
+  !
+  ! Basically, asm_telem_row%asmdats is similar to the telemetry rows, except the first 4 bytes (offset) in every 16 bytes are removed.
+  !
+  ! for examle, if (1,5) for irow16=1 (first in the 128-bytes frame), (13, 21) for irow16=2 (second)
+  ! (85, 117) for irow16=8 (last).
+  subroutine calc_rows_asmdats_telem(irow16, iasm, itel)
+    implicit none
+    integer, intent(in) :: irow16
+    integer, intent(out) :: iasm, itel
+
+    itel = (irow16-1)*16 + 4 + 1
+    iasm = (irow16-1)*12 + 1
+  end subroutine calc_rows_asmdats_telem
+
+
+  !-----------------------------------------
+  ! Gets the corresponding row number of asm_telem_row%asmdats (see get_telem_raws2types() in asm_read_telemetry)
+  ! for the output column (TTYPEn).
+  !
+  ! (Table5.5.5-6 (pp.233-234))
+  ! For example,
+  !   row=1  (Y1-FW1-CH00, W4 (Wn for n=0..127, CHnn for nn=0..15, Y1/2, FW1/2)) for TTYPE=1
+  !   row=2  (Y1-FW1-CH08, W5)  for TTYPE=9
+  !   row=13 (Y1-FW1-CH01, W20) for TTYPE=2
+  !
+  ! This routine gives the row number [1,2,13,...] for the column number [1,9,2,...].
+  !
+  integer function get_asmdats_row4col(index_col) result(i_asmdats)
+    implicit none
+    integer, intent(in)  :: index_col
+    integer :: ifw, iy1, ichp, icht, idiv8
+
+    integer :: idet, ich, i_tele, i_out
+
+    call split_i_ttype_asmmain(index_col, ifw, iy1, ichp, icht, idiv8)
+
+    ! ioff_vert = icht*12                        ! Vertial offset (every 12)
+    ! ioff_hori = ((ifw-1)*2+(iy1-1))*2+idiv8+1  ! Horizontal offset (after some multiple of 12)
+    i_asmdats =  icht*12 + ((ifw-1)*2+(iy1-1))*2+idiv8+1
+  end function get_asmdats_row4col
+
+  !-----------------------------------------
+  subroutine split_i_ttype_asmmain(index, ifw, iy1, ichp, icht, idiv8)
+    implicit none
+    integer, intent(in)  :: index
+    integer, intent(out) :: ifw, iy1,  ichp,    icht,   idiv8 ! (I-DIVided-by-8)
+                        ! FW1-3, Y1-2, CH00-15, CH00-07, 0-1(L-or-H in Time-mode)
+                        !        Mode: PHA      TIME (I-CHannel-Time)
+    integer :: ifwmod
+
+    ifw    =     (index-1)/(NWORDS_MAIN/3)   + 1 ! FW1--FW3
+    ifwmod = mod( index-1,  NWORDS_MAIN/3)   + 1 ! (1..32)
+    iy1    =    (ifwmod-1)/(NWORDS_MAIN/3/2) + 1 ! Y1--Y2
+    ichp   = mod(ifwmod-1,  NWORDS_MAIN/3/2)     ! CH0--CH15 for PHA-mode (0..15)
+    idiv8  =     ichp/(NCHANS_PHA/2)                  ! 0 for Ch00-07, 1 for Ch08-15 
+    icht   = mod(ichp, NCHANS_PHA/2)            ! CH0--CH07 for TIME-mode (0..7)
+  end subroutine split_i_ttype_asmmain
+
+  !-----------------------------------------
+  ! Return the TTYPE string of the Main ASM data part for the given index [1:96] (eg, TTYPE5).
+  ! Table5.5.5-6 (pp.233-234)
+  !
+  ! Examples:
+  !
+  !   TFORM1= 'Y11CH00_Y11L00',
+  !   TFORM17='Y21CH00_Y21L00',
+  !   TFORM32='Y21CH15_Y21H07',
+  !   TFORM33='Y12CH00_Y12L00',
+  !   TFORM96='Y23CH15_Y23H07',
+  !
+  character(len=LEN_TTYPE) function get_ttype_main(index) result(ret)
+    implicit none
+    integer, intent(in) :: index
+
+    integer :: iy1, ifw, ifwmod, ichp, icht  ! ichp for PHA-mode, icht=mod(ichp, 8) for TIME-mode
+    character(len=1) :: low_high
+    character(len=LEN_TTYPE) :: stmp
+    character(len=1) :: ciy1, cifw
+    character(len=2) :: cichp, cicht
+
+    ret = ''
+    ! Y11, Y21, Y12, Y22, Y13, Y23
+    ifw    =     (index-1)/(NWORDS_MAIN/3)   + 1 ! FW1--FW3
+    ifwmod = mod( index-1,  NWORDS_MAIN/3)   + 1 ! (1..32) ! ifwmod = mod((index-1), NWORDS_MAIN/3)
+    iy1    =    (ifwmod-1)/(NWORDS_MAIN/3/2) + 1 ! Y1--Y2
+    ichp   = mod(ifwmod-1,  NWORDS_MAIN/3/2)     ! CH0--CH15 for PHA-mode (0..15)
+    low_high = 'H'
+    if (ichp/(NCHANS_PHA/2) == 0) low_high = 'L'  ! else Default 'H'
+    icht   = mod(ichp,  NCHANS_PHA/2)             ! CH0--CH07 for TIME-mode (0..7)
+
+    if (.true.) then  ! set it .false. when memory trouble is rampant...
+      write(ret, '("Y", I1, I1, "CH", I0.2, "_Y", I1, I1, A1, I0.2)') &
+         iy1, ifw, ichp, iy1, ifw, low_high, icht
+      return
+    end if
+
+    ! ------------- below: not executed in default (unless the above .true. is reset to .false.)
+    !               This can be useful when memory trouble is rampant.
+    select case(iy1)
+    case (1)
+      ciy1='1'
+    case (2)
+      ciy1='2'
+    case default
+      print *,'iy1 is NOT 1 or 2, but=',iy1
+      call EXIT(1)
+    end select
+
+    select case(ifw)
+    case (1,2,3)
+      cifw=char(ifw+48)
+    case default
+      print *,'ifw is NOT 1 or 2 or 3, but=',ifw
+      call EXIT(1)
+    end select
+
+    cichp = char(ichp/10+48)
+    cichp(2:2) = char(mod(ichp,10)+48)
+    cicht = '00'
+    cicht(2:2) = char(icht+48)
+    ret = 'Y'//ciy1//cifw//'CH'//cichp//'_Y'//ciy1//low_high//cicht
+  end function get_ttype_main
+
+  
+  !-----------------------------------------
+  ! Modify the comment of a FITS header for a TTYPEn column
+  !
+  ! ckey is defined in COL_FORM_UNITS(i)%key (in asm_fits_common)
+  subroutine modify_ttype_comment(unit, ittype, ckey, status)
+    implicit none
+    integer, intent(in) :: unit
+    integer, intent(in) :: ittype  ! TTYPEn number
+    character(len=*), intent(in) :: ckey
+    integer, intent(out) :: status
+
+    type(t_form_unit) :: colprm
+
+    colprm = get_element(ckey, COL_FORM_UNITS) ! defined in asm_fits_common
+    call FTMCOM(unit, trim(ladjusted_int(ittype, 'TTYPE')), colprm%comm, status) ! defined in fort_util
+  end subroutine modify_ttype_comment
+  
+  !-----------------------------------------
+  ! Set 1 element of the given colheads (Array object of TTYPE)
+  !
+  ! Condition: TTYPE and key agree, except for the dimension
+  !
+  ! If member "dimension" in COL_FORM_UNITS is greater than 1, this sets multiple TTYPES
+  ! for the "dimsion" number.  For example, key=Euler has dimsion=3; thus
+  ! EULER1, EULER2, EULER3 are set.
+  !
+  ! increment is the number of indices (i.e., dimensions) this routine has filled.
+  subroutine set_colheads_single(index_start, key, colheads, index_last)
+    integer, intent(in) :: index_start ! colheads(index_start) and onwards will be set in this routine.
+    character(len=*), intent(in) :: key
+    type(t_asm_colhead), dimension(:), intent(inout) :: colheads
+    integer, intent(out) :: index_last ! up to colheads(index_last) is set after this routine.  If negative, something has gone wrong.
+
+    type(t_form_unit) :: colprm
+    character(len=MAX_LEN_FKEY) :: sk
+    character(len=max_fits_char) :: root, ttype ! TTYPE (for temporary use)
+    character(len=10240) :: msg
+    integer :: idim, i
+
+    !colprm = get_element(key, COL_FORM_UNITS)  ! With this, error is difficult to catch.
+    i = get_index(key, COL_FORM_UNITS)
+    if (i < 0) then
+      ! No column is found!
+      index_last = UNDEF_INT
+      write(stderr, '(A)') 'WARNING(set_colheads_single): Key='//trim(key)//' is not defined in COL_FORM_UNITS.'
+!call err_exit_with_msg(msg)
+      return
+    end if
+    colprm = COL_FORM_UNITS(i)
+
+    index_last = index_start + colprm%dim - 1
+    if (colprm%dim > 1) then
+      do idim=1, colprm%dim
+        ttype = trim(ladjusted_int(idim, trim(colprm%root))) ! defined in fort_util
+        colheads(index_start+idim-1) = t_asm_colhead(key=key, type=ttype, prm=colprm)
+      end do
+    else if (colprm%dim < 0) then
+      call err_exit_play_safe()
+    else  ! ie. (dimension == 1)
+      colheads(index_start) = t_asm_colhead(key=key, type=key, prm=colprm)
+    end if
+  end subroutine set_colheads_single
+
+  !-----------------------------------------
+  ! Returns Array of type(t_asm_colhead) that is the FITS Column-head information
+  ! for the given Array of Character.
+  function get_colheads(ckeys) result(colheads)
+    character(len=*), dimension(:), intent(in), optional :: ckeys
+    type(t_asm_colhead), dimension(:), allocatable :: colheads
+
+    ! Output columns (8 char max?)
+    ! This may be defined as equal to COL_FORM_UNITS(:)%key
+    ! Justification to redefine it here is you can control what to handle in this subroutine,
+    ! independent of (module-wide constant parameter) COL_FORM_UNITS
+    character(len=MAX_LEN_FKEY), dimension(:), allocatable :: colhead_keys
+    integer, dimension(:), allocatable :: dims  ! Array of t_form_unit%dim corresponding to ckeys
+    character(len=max_fits_char) :: ttype ! TTYPE (for temporary use)
+    character(len=LEN_READABLE_KEY) :: sk
+    integer :: i, irow, ikey, ittype, ilast, nsiz, increment
+    type(t_form_unit) :: tmp_fu
+    character(len=1024) :: msg
+
+    if (present(ckeys)) then
+      colhead_keys = ckeys
+      nsiz = get_ncols_colheads(colhead_keys)
+      if (nsiz < 0) then
+        call dump_chars(colhead_keys, 'ERROR: in get_colheads, given keys=')
+        ! The keyword was not found!
+        msg = 'One (or more) of the keys is not defined in COL_FORM_UNITS (Failed in get_colheads).'
+        call err_exit_with_msg(msg)
+      end if
+    else
+      colhead_keys = COL_FORM_UNITS(:)%key
+      nsiz = get_ncols_colheads()
+    end if
+
+    allocate(dims(size(colhead_keys)))
+    allocate(colheads(nsiz))
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !  It may not start from NWORDS_MAIN. irow increases by %prm%dim
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Algorithm
+    !  Make formunits%key%dim array corresponding to the input Character-array
+    !  Loop over i of colhead_keys (=formunits%key%dim)
+    !  Make TFORM etc for each i like 96 main ones.
+
+    ittype = 0  ! 23 for TTYPE23 => colheads(ittype)
+    do ikey=1, size(colhead_keys)
+      select case(trim(colhead_keys(ikey)))
+      case('main') ! Special case (ASM main data), where %prm%root is ignored.
+        do irow=1, NWORDS_MAIN
+          sk = 'main'
+          ttype = get_ttype_main(irow)
+          ittype = ittype + 1
+if (ittype > nsiz) call err_exit_play_safe()
+          colheads(ittype) = t_asm_colhead(key=sk, type=trim(ttype), prm=get_element(sk, COL_FORM_UNITS))
+        end do
+      case default
+        call set_colheads_single(ittype+1, colhead_keys(ikey), colheads, index_last=ilast)
+        if (ilast < 0) then
+          ! The keyword was not found!
+          msg = 'Key='//trim(colhead_keys(ikey))//' is not defined in COL_FORM_UNITS (Failed in get_colheads).'
+          call err_exit_with_msg(msg)
+        end if
+        ittype = ilast
+if (ittype > nsiz) call err_exit_play_safe()
+      end select
+    end do
+
+    if (allocated(colhead_keys)) deallocate(colhead_keys)
+  end function get_colheads
+
+
+  !-----------------------------------------
+  ! Print the result of calc_proc_stats() to STDOUT
+  !
+  subroutine print_proc_stats(trows, relrows, frfrows)
+    type(asm_telem_row), dimension(:), intent(in) :: trows
+    type(asm_sfrow), dimension(:), intent(in) :: relrows
+    type(asm_frfrow), dimension(:), intent(in) :: frfrows
+    character(len=LEN_PROC_STATS), dimension(:), allocatable :: ar_strs_stats
+    integer :: j
+
+    ar_strs_stats = calc_proc_stats(trows, relrows, frfrows)  ! allocatable
+    write(*,'("----------- Processing Statistics -----------")')
+    do j=1, size(ar_strs_stats)
+      write(*,'(A)') trim(ar_strs_stats(j))
+    end do
+    write(*,'("---------------------------------------------")')
+    if (allocated(ar_strs_stats)) deallocate(ar_strs_stats)
+  end subroutine print_proc_stats
+
+  !-----------------------------------------
+  ! Returns String of process statistics
+  !
+  ! TODO: Discarded due to ASM at the beginning, end, middle
+  !
+  ! Note: Call print_proc_stats() to output to STDOUT
+  function calc_proc_stats(trows, sfrows, frfrows) result(strs_stats)
+    integer, parameter :: n_b4bd = 5, SIZE_FMT = size(INVALID_FMT)
+    type(asm_telem_row), dimension(:), intent(in) :: trows
+    type(asm_sfrow), dimension(:), intent(in) :: sfrows
+    type(asm_frfrow), dimension(:), intent(in) :: frfrows
+    character(len=LEN_PROC_STATS), dimension(n_b4bd+SIZE_FMT+2) :: strs_stats
+    character(len=LEN_PROC_STATS) :: s
+
+    logical, dimension(size(trows)) :: mask_tr
+    integer :: n_fr_output, n_tot, n_discarded
+    integer :: i, j, n, ifmt
+
+    n_fr_output = sum(sfrows%nframes, sfrows%is_valid)
+    write(s,'("Output/Discarded/Telemetry numbers of frames: ", I6, " /", I6, " /", I6)') &
+       n_fr_output, size(trows)-n_fr_output, size(trows)
+    strs_stats(n_b4bd-4) = s  ! Index=1
+    n = count(sfrows%is_valid)
+    n_discarded = size(sfrows)-n
+    write(s,'("Output/Discarded/Telemetry numbers of SFs: ", I5, " /", I5, " /", I5)') &
+       n, n_discarded, size(sfrows)
+    strs_stats(n_b4bd-3) = s  ! Index=2
+    strs_stats(n_b4bd-2) = '  (Note: SF number of Telemetry may not be strictly accurate.)' ! Index=3
+    write(s,'("FRF/matched(be4-discarded) numbers of SFs: ", I5, " /", I5)') &
+       size(frfrows), count(sfrows%with_frf)
+    strs_stats(n_b4bd-1) = s ! Index=4
+    strs_stats(n_b4bd)   = '  Breakdown: discarded due to:' ! Index=5
+    n_tot = 0
+    do ifmt=1, SIZE_FMT             ! Index=5..X
+      ! Counting the number of Frames for each "reason_invalid" (which is defined only when is_valid==.false.)
+      n = 0
+      do i=1, size(sfrows)
+        if (.not. sfrows(i)%is_valid) then
+          if (trim(sfrows(i)%reason_invalid%key) == trim(INVALID_FMT(ifmt)%key)) n = n + 1
+        end if
+      end do
+      write(s,'("    ",I5,": ",A)') n, trim(INVALID_FMT(ifmt)%desc)
+      strs_stats(n_b4bd+ifmt) = s
+      n_tot = n_tot + n
+    end do
+    write(s,'("    ",I5,"=(Total) (for sanity-check <=> ",I5,")")') n_tot, n_discarded
+    strs_stats(n_b4bd+SIZE_FMT+1) = s  ! Index: Last-1
+    write(s,'("Telemetry SFs without FRF counterparts vs undefined sfn: ",I5," <=> ",I5," (for sanity-check)")') &
+       count(.not. sfrows%with_frf), count(sfrows%frf%sfn < 0)
+    strs_stats(n_b4bd+SIZE_FMT+2) = s  ! Index: Last
+  end function calc_proc_stats
+
+  !-----------------------------------------
+  ! Inverse of get_onoff_enadis(). Returns either 0 or 1.
+  !
+  ! If neither, return a negative value (-999)
+  integer function get_0or1_from_onoff(val) result(iret)
+    character(len=*), intent(in) :: val
+
+    if (     (trim(val) == 'ON')  .or. (trim(val) == 'on')  .or. &
+             (trim(val) == 'ENA') .or. (trim(val) == 'ena')) then
+      iret = 1
+    else if ((trim(val) == 'OFF') .or. (trim(val) == 'off')  .or. &
+             (trim(val) == 'DIS') .or. (trim(val) == 'dis')) then
+      iret = 0
+    else
+      iret = UNDEF_INT
+      !write(stderr,'(A)') 'FATAL: Neither ON/OFF nor ENA/DIS: "'//trim(val)//'"'
+      !call EXIT(1)  ! for gfortran, Lahey Fujitsu Fortran 95, etc
+    end if
+  end function get_0or1_from_onoff
+
+  !-----------------------------------------
+  ! Returns true if the environmental variable DEBUG is set and NOT 'false' or 'no'.
+  logical function IS_DEBUG() result(ret)
+    character(len=1024) :: env_debug
+    integer :: status
+    integer, save :: prev_result = -99
+
+    ! To avoid repeatedly accessing the system to get the environmental variable.
+    if (prev_result .ge. 0) then  ! This IF-statment is redundant (but is left for readability).
+      select case(prev_result)
+      case(0)
+        ret = .false.
+        return
+      case(1)
+        ret = .true.
+        return
+      end select
+    end if
+        
+    call GET_ENVIRONMENT_VARIABLE('GINGA_DEBUG', env_debug, STATUS=status)
+    if ((status == 1) .or. (status == 2)) then  ! 1 for non-existent, 2 for environment var. not-supported by the system
+      ret = .false.
+      prev_result = 0
+    else if ((trim(env_debug) == 'false') .or. (trim(env_debug) == 'no')) then  ! 1 for non-existent, 2 for environment var. not-supported by the system
+      prev_result = 0
+    else
+      ret = .true.
+      prev_result = 1
+    end if
+  end function IS_DEBUG
+
 
   !-----------------------------------------
   ! interface get_index
@@ -731,33 +1227,6 @@ contains
     write(stderr,'(A)') 'WARNING: (get_index_argv) Index is not found for key="'//trim(key)//'"'
     iret = UNDEF_INT
   end function get_index_argv
-
-
-  ! Get the number associated with TTYPE in colhead, like 3 in TTYPEn='Euler3'
-  integer function get_colhead_type_num(colhead, name) result(iret)
-    type(t_asm_colhead), intent(in) :: colhead
-    character(len=*), intent(in) :: name ! for the prefix, like 'Euler'. Mandatory
-    integer :: status
-    character(len=max_fits_char) :: kwd
-    character(len=1024) :: usermsg
-
-    read(colhead%type, '(A'//trim(ladjusted_int(len_trim(name)))//',I3)', iostat=status) kwd, iret
-
-    if (trim(kwd) .ne. trim(name)) then
-      print *, 'ERROR(get_colhead_type_num): colhead is:'
-      call dump_type(colhead)
-      write(usermsg, '("Key is not Expected=",A," <=> ",A)') trim(kwd), trim(name)
-      call err_exit_play_safe(usermsg)
-    end if
-
-    if (status .ne. 0) then
-      ! Read (format?) error
-      print *, 'ERROR(get_colhead_type_num): colhead is:'
-      call dump_type(colhead)
-      write(usermsg, '("(get_colhead_type_num) Status is non-zero: ",I8)') status
-      call err_exit_with_msg(usermsg)
-    end if
-  end function get_colhead_type_num
 
 
   integer function get_index_colhead(key, ary) result(iret)
@@ -872,123 +1341,9 @@ contains
   end function get_int_from_key_argv
 
   !-----------------------------------------
-  
-  ! Returns the object type(t_reason_invalid)
-  !
-  ! For the key, see the member 'key' of the parameter INVALID_FMT
-  ! e.g., (no_frf|tel64|lostf|asmswoff|asmmodeoff)
-  function get_reason_invalid(key, i1, i2) result(tret)
-    character(len=*), intent(in) :: key
-    integer, intent(in), optional :: i1, i2
-    type(t_reason_invalid) :: tret
-
-    type(t_invalid_fmt) :: invalid_fmt
-    character(len=max_fits_char) :: rettext
-
-    invalid_fmt = get_invalid_fmt(key)
-    if      (invalid_fmt%nargs == 0) then
-      write(rettext, invalid_fmt%fmt)
-    else if (invalid_fmt%nargs == 1) then
-      write(rettext, invalid_fmt%fmt) i1
-    else if (invalid_fmt%nargs == 2) then
-      write(rettext, invalid_fmt%fmt) i2
-    else
-      write(stderr,'(A)') 'Unsupported. Contact the code developer.'
-      call EXIT(1)  ! for gfortran, Lahey Fujitsu Fortran 95, etc
-    end if
-    tret = t_reason_invalid(key=key, text=rettext)
-  end function get_reason_invalid
-
-  ! Returns frame-row-index of type(asm_telem_row) that has the specified frame number like F32,
-  ! with the search starting from a specified row number (istart; counted from 1).
-  !
-  ! If not found, a negative value is returned.
-  ! NOTE: (Fortran Array index (from 1))
-  !
-  function get_telem_row_index_from_fr(frn, trows, istart, nrows) result(retrow)
-    integer, intent(in) :: frn    ! Frame number to search for, eg., F32
-    type(asm_telem_row), dimension(:), intent(in) :: trows
-    integer, intent(in) :: istart ! Start row (in trows) for search
-    integer, intent(in) :: nrows  ! Number of rows to search from istart
-    integer :: retrow ! to return
-    integer :: irow
-
-    retrow = UNDEF_INT
-    do irow=istart, istart+nrows-1
-      if (frn == trows(irow)%fr_6bit) then
-        retrow = irow
-        return
-      end if
-    end do
-  end function get_telem_row_index_from_fr
-
-  ! (almost) Inverse of get_telem_row_index_from_fr
-  !
-  ! Find a SF-row object in sfrows from Telemetry-FITS row-number
-  !
-  ! If not found, the returned retsfrow%irowt is negative (or possibly zero, if specification changes).
-  function get_sfrow_from_telem_row_index(in_rowt, sfrows) result(retsfrow)
-    integer, intent(in) :: in_rowt    ! Row number of Telemetry
-    type(asm_sfrow), dimension(:), allocatable, intent(in) :: sfrows
-    type(asm_sfrow) :: retsfrow ! to return
-    integer :: irow
-
-    do irow=1, size(sfrows)
-      if ((sfrows(irow)%irowt .le. in_rowt) .and. &
-          (in_rowt .le. sfrows(irow)%irowt + sfrows(irow)%nframes)) then
-        retsfrow = sfrows(irow)
-        return
-      end if
-    end do
-  end function get_sfrow_from_telem_row_index
-
-  ! Returns the word number in Telemetry (128-words)
-  !
-  ! In default it counts from 0 (zero), namely W0 to W127,
-  ! unless optional argument from1 is given and .true.,
-  ! in which case it starts from 1 like a Fortran Array.
-  !
-  ! name is (fi|dp|status|pi_mon), so far, and in lower-cases ONLY.
-  integer function w_no(name, from1) result(iret)
-    character(len=*), intent(in) :: name
-    logical, intent(in), optional :: from1
-    integer :: add1
-
-    if (present(from1) .and. from1) then
-      add1 = 1
-    else
-      add1 = 0
-    end if
-
-    select case(trim(name))
-    case('fi')
-      iret = TELEM_WORD_FROM0%fi
-    case('dp')
-      iret = TELEM_WORD_FROM0%dp
-    case('status')
-      iret = TELEM_WORD_FROM0%status
-    case('pi_mon')
-      iret = TELEM_WORD_FROM0%pi_mon
-    case('acss')  ! The first word
-      iret = TELEM_WORD_FROM0%acss
-    case('asm1_commons')  ! The first word
-      iret = TELEM_WORD_FROM0%asm1_commons
-    case('asm2_commons')  ! The first word
-      iret = TELEM_WORD_FROM0%asm2_commons
-    case default
-      iret = UNDEF_INT
-    end select
-
-    iret = iret + add1
-  end function w_no
-
-  ! Returns MJD of starting epoch of the first frame of a SF, based on sfrow/relrow
-  real(kind=dp8) function sfrow2mjd(sfrow, trows) result(retmjd)
-    type(asm_sfrow), intent(in) :: sfrow
-    type(asm_telem_row), dimension(:), intent(in) :: trows
-
-    retmjd = trows(sfrow%irowt)%mjd
-  end function sfrow2mjd
+  ! interface dump_type
+  !   : mainly for debugging.
+  !-----------------------------------------
 
   ! dump character array
   subroutine dump_chars(rows, prefix)
@@ -1153,9 +1508,7 @@ contains
       write(*,'("key=''",A,"'', TTYPE=",A,"''")') &
          trim(colhead%key), trim(colhead%type)
       call dump_form_unit(colhead%prm, with_indent=.true.)
-      !print *, ' --------- %prm (=asm_form_unit) ---------' 
-      !write(*,'("  k=''",A,"''(prm), TFORM=''",A,"'', TUNIT=''",A,"'', dim=",I2,", comm=''",A,"''")') &
-      !   trim(colhead%prm%key), trim(colhead%prm%form), trim(colhead%prm%unit),colhead%prm%dim, trim(colhead%prm%comm)
+
     else  ! This is useful when memory trouble is rampant...
       print *, '--------- asm_colhead ---------' 
       print *,'key=',trim(colhead%key),' type=',trim(colhead%type)
@@ -1199,166 +1552,6 @@ contains
     write(*,'("-------------------------------")')
   end subroutine dump_fits_header
 
-
-  ! Calculates the asmdats and telemetry row numbers for the first ASM data in the given 16-byte row number
-  !
-  ! Basically, asm_telem_row%asmdats is similar to the telemetry rows, except the first 4 bytes (offset) in every 16 bytes are removed.
-  !
-  ! for examle, if (1,5) for irow16=1 (first in the 128-bytes frame), (13, 21) for irow16=2 (second)
-  ! (85, 117) for irow16=8 (last).
-  subroutine calc_rows_asmdats_telem(irow16, iasm, itel)
-    implicit none
-    integer, intent(in) :: irow16
-    integer, intent(out) :: iasm, itel
-
-    itel = (irow16-1)*16 + 4 + 1
-    iasm = (irow16-1)*12 + 1
-  end subroutine calc_rows_asmdats_telem
-
-
-  ! Gets the corresponding row number of asm_telem_row%asmdats (see get_telem_raws2types() in asm_read_telemetry)
-  ! for the output column (TTYPEn).
-  !
-  ! (Table5.5.5-6 (pp.233-234))
-  ! For example,
-  !   row=1  (Y1-FW1-CH00, W4 (Wn for n=0..127, CHnn for nn=0..15, Y1/2, FW1/2)) for TTYPE=1
-  !   row=2  (Y1-FW1-CH08, W5)  for TTYPE=9
-  !   row=13 (Y1-FW1-CH01, W20) for TTYPE=2
-  !
-  ! This routine gives the row number [1,2,13,...] for the column number [1,9,2,...].
-  !
-  integer function get_asmdats_row4col(index_col) result(i_asmdats)
-    implicit none
-    integer, intent(in)  :: index_col
-    integer :: ifw, iy1, ichp, icht, idiv8
-
-    integer :: idet, ich, i_tele, i_out
-
-    call split_i_ttype_asmmain(index_col, ifw, iy1, ichp, icht, idiv8)
-
-    ! ioff_vert = icht*12                        ! Vertial offset (every 12)
-    ! ioff_hori = ((ifw-1)*2+(iy1-1))*2+idiv8+1  ! Horizontal offset (after some multiple of 12)
-    i_asmdats =  icht*12 + ((ifw-1)*2+(iy1-1))*2+idiv8+1
-  end function get_asmdats_row4col
-
-  subroutine split_i_ttype_asmmain(index, ifw, iy1, ichp, icht, idiv8)
-    implicit none
-    integer, intent(in)  :: index
-    integer, intent(out) :: ifw, iy1,  ichp,    icht,   idiv8 ! (I-DIVided-by-8)
-                        ! FW1-3, Y1-2, CH00-15, CH00-07, 0-1(L-or-H in Time-mode)
-                        !        Mode: PHA      TIME (I-CHannel-Time)
-    integer :: ifwmod
-
-    ifw    =     (index-1)/(NWORDS_MAIN/3)   + 1 ! FW1--FW3
-    ifwmod = mod( index-1,  NWORDS_MAIN/3)   + 1 ! (1..32)
-    iy1    =    (ifwmod-1)/(NWORDS_MAIN/3/2) + 1 ! Y1--Y2
-    ichp   = mod(ifwmod-1,  NWORDS_MAIN/3/2)     ! CH0--CH15 for PHA-mode (0..15)
-    idiv8  =     ichp/(NCHANS_PHA/2)                  ! 0 for Ch00-07, 1 for Ch08-15 
-    icht   = mod(ichp, NCHANS_PHA/2)            ! CH0--CH07 for TIME-mode (0..7)
-  end subroutine split_i_ttype_asmmain
-
-  ! Return the TTYPE string of the Main ASM data part for the given index [1:96] (eg, TTYPE5).
-  ! Table5.5.5-6 (pp.233-234)
-  !
-  ! Examples:
-  !
-  !   TFORM1= 'Y11CH00_Y11L00',
-  !   TFORM17='Y21CH00_Y21L00',
-  !   TFORM32='Y21CH15_Y21H07',
-  !   TFORM33='Y12CH00_Y12L00',
-  !   TFORM96='Y23CH15_Y23H07',
-  !
-  character(len=LEN_TTYPE) function get_ttype_main(index) result(ret)
-    implicit none
-    integer, intent(in) :: index
-
-    integer :: iy1, ifw, ifwmod, ichp, icht  ! ichp for PHA-mode, icht=mod(ichp, 8) for TIME-mode
-    character(len=1) :: low_high
-    character(len=LEN_TTYPE) :: stmp
-    character(len=1) :: ciy1, cifw
-    character(len=2) :: cichp, cicht
-
-    ret = ''
-!print *,'DEBUG:632:start'
-    ! Y11, Y21, Y12, Y22, Y13, Y23
-    ifw    =     (index-1)/(NWORDS_MAIN/3)   + 1 ! FW1--FW3
-    ifwmod = mod( index-1,  NWORDS_MAIN/3)   + 1 ! (1..32) !!!!!!!!!!! ifwmod = mod((index-1), NWORDS_MAIN/3)
-    iy1    =    (ifwmod-1)/(NWORDS_MAIN/3/2) + 1 ! Y1--Y2
-    ichp   = mod(ifwmod-1,  NWORDS_MAIN/3/2)     ! CH0--CH15 for PHA-mode (0..15)
-    low_high = 'H'
-!print *,'DEBUG:642:bef_lowh'
-    if (ichp/(NCHANS_PHA/2) == 0) low_high = 'L'  ! else Default 'H'
-    icht   = mod(ichp,  NCHANS_PHA/2)             ! CH0--CH07 for TIME-mode (0..7)
-
-    if (.true.) then  ! set it .false. when memory trouble is rampant...
-      write(ret, '("Y", I1, I1, "CH", I0.2, "_Y", I1, I1, A1, I0.2)') &
-         iy1, ifw, ichp, iy1, ifw, low_high, icht
-      return
-    end if
-
-    ! ------------- below: not executed in default (unless the above .true. is reset to .false.)
-    !               This can be useful when memory trouble is rampant.
-!print *,'DEBUG:642-1, iy1=', iy1
-    select case(iy1)
-    case (1)
-      ciy1='1'
-    case (2)
-      ciy1='2'
-    case default
-      print *,'iy1 is NOT 1 or 2, but=',iy1
-      call EXIT(1)
-    end select
-        !write(ciy1, '(I1)') iy1
-!print *,'DEBUG:642-2, ifw=',ifw
-    select case(ifw)
-    case (1,2,3)
-      cifw=char(ifw+48)
-    case default
-      print *,'ifw is NOT 1 or 2 or 3, but=',ifw
-      call EXIT(1)
-    end select
-        !write(cifw, '(I1)') ifw
-!print *,'DEBUG:642-3'
-!print *,'DEBUG:642-3-cifw=',cifw,' ichp=',ichp
-    cichp = char(ichp/10+48)
-    cichp(2:2) = char(mod(ichp,10)+48)
-        !write(cichp, '(I0.2)') ichp
-!print *,'DEBUG:643:aft_lowh, cichp=',cichp
-!print *,'DEBUG:643-0:icht=',icht
-    cicht = '00'
-    cicht(2:2) = char(icht+48)
-!print *,'DEBUG:643-1, icht=', icht, ' cicht=',cicht
-        !write(cicht, '(I0.2)') icht
-!print *,'DEBUG:644:bef_wri,iy1=',iy1,' ifw=',ifw,' ichp=',ichp
-    ret = 'Y'//ciy1//cifw//'CH'//cichp//'_Y'//ciy1//low_high//cicht
-!print *,'DEBUG:644-1:bef_wri,ret=',ret
-  end function get_ttype_main
-
-  
-  ! Modify the comment of a FITS header for a TTYPEn column
-  !
-  ! ckey is defined in COL_FORM_UNITS(i)%key (in asm_fits_common)
-  subroutine modify_ttype_comment(unit, ittype, ckey, status)
-    implicit none
-    integer, intent(in) :: unit
-    integer, intent(in) :: ittype  ! TTYPEn number
-    character(len=*), intent(in) :: ckey
-    integer, intent(out) :: status
-
-    type(t_form_unit) :: colprm
-
-    colprm = get_element(ckey, COL_FORM_UNITS) ! defined in asm_fits_common
-    call FTMCOM(unit, trim(ladjusted_int(ittype, 'TTYPE')), colprm%comm, status) ! defined in fort_util
-  end subroutine modify_ttype_comment
-  
-
-  ! Returns String like 'ASMSF002' for the num-th extension
-  character(len=nchar_extname) function get_extname(num)
-    integer, intent(in) :: num  ! starts from 1, i.e., num==1 for the 1st extension
-
-    write(get_extname, '("ASMSF", i0.3)') num
-    return
-  end function get_extname
 
   !-----------------------------------------
   ! interface get_ncols_colheads
@@ -1416,222 +1609,8 @@ contains
   !-----------------------------------------
 
   
-  ! Set 1 element of the given colheads (Array object of TTYPE)
-  !
-  ! Condition: TTYPE and key agree, except for the dimension
-  !
-  ! If member "dimension" in COL_FORM_UNITS is greater than 1, this sets multiple TTYPES
-  ! for the "dimsion" number.  For example, key=Euler has dimsion=3; thus
-  ! EULER1, EULER2, EULER3 are set.
-  !
-  ! increment is the number of indices (i.e., dimensions) this routine has filled.
-  subroutine set_colheads_single(index_start, key, colheads, index_last)
-    integer, intent(in) :: index_start ! colheads(index_start) and onwards will be set in this routine.
-    character(len=*), intent(in) :: key
-    type(t_asm_colhead), dimension(:), intent(inout) :: colheads
-    integer, intent(out) :: index_last ! up to colheads(index_last) is set after this routine.  If negative, something has gone wrong.
-
-    type(t_form_unit) :: colprm
-    character(len=MAX_LEN_FKEY) :: sk
-    character(len=max_fits_char) :: root, ttype ! TTYPE (for temporary use)
-    character(len=10240) :: msg
-    integer :: idim, i
-
-!print *,'DEBUG:423:set_colhn'    
-!call dump_type(ary(size(ary)))
-    !colprm = get_element(key, COL_FORM_UNITS)  ! With this, error is difficult to catch.
-    i = get_index(key, COL_FORM_UNITS)
-!print *,'DEBUG:424:i=',i
-    if (i < 0) then
-      ! No column is found!
-      index_last = UNDEF_INT
-      write(stderr, '(A)') 'WARNING(set_colheads_single): Key='//trim(key)//' is not defined in COL_FORM_UNITS.'
-!call err_exit_with_msg(msg)
-      return
-    end if
-    colprm = COL_FORM_UNITS(i)
-
-    index_last = index_start + colprm%dim - 1
-    if (colprm%dim > 1) then
-      do idim=1, colprm%dim
-        ttype = trim(ladjusted_int(idim, trim(colprm%root))) ! defined in fort_util
-        colheads(index_start+idim-1) = t_asm_colhead(key=key, type=ttype, prm=colprm)
-      end do
-    else if (colprm%dim < 0) then
-      call err_exit_play_safe()
-    else  ! ie. (dimension == 1)
-      colheads(index_start) = t_asm_colhead(key=key, type=key, prm=colprm)
-    end if
-  end subroutine set_colheads_single
-
-  ! Returns Array of type(t_asm_colhead) that is the FITS Column-head information
-  ! for the given Array of Character.
-  function get_colheads(ckeys) result(colheads)
-    character(len=*), dimension(:), intent(in), optional :: ckeys
-    type(t_asm_colhead), dimension(:), allocatable :: colheads
-
-    ! Output columns (8 char max?)
-    ! This may be defined as equal to COL_FORM_UNITS(:)%key
-    ! Justification to redefine it here is you can control what to handle in this subroutine,
-    ! independent of (module-wide constant parameter) COL_FORM_UNITS
-    character(len=MAX_LEN_FKEY), dimension(:), allocatable :: colhead_keys
-    integer, dimension(:), allocatable :: dims  ! Array of t_form_unit%dim corresponding to ckeys
-    character(len=max_fits_char) :: ttype ! TTYPE (for temporary use)
-    character(len=LEN_READABLE_KEY) :: sk
-    integer :: i, irow, ikey, ittype, ilast, nsiz, increment
-    type(t_form_unit) :: tmp_fu
-    character(len=1024) :: msg
-!character(len=LEN_TTYPE) :: tmp_cha  ! for DEBUG
-
-    if (present(ckeys)) then
-      colhead_keys = ckeys
-      nsiz = get_ncols_colheads(colhead_keys)
-      if (nsiz < 0) then
-        call dump_chars(colhead_keys, 'ERROR: in get_colheads, given keys=')
-        ! The keyword was not found!
-        msg = 'One (or more) of the keys is not defined in COL_FORM_UNITS (Failed in get_colheads).'
-        call err_exit_with_msg(msg)
-      end if
-    else
-      colhead_keys = COL_FORM_UNITS(:)%key
-      nsiz = get_ncols_colheads()
-    end if
-
-    allocate(dims(size(colhead_keys)))
-    allocate(colheads(nsiz))
-
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    !  It may not start from NWORDS_MAIN. irow increases by %prm%dim
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    ! Algorithm
-    !  Make formunits%key%dim array corresponding to the input Character-array
-    !  Loop over i of colhead_keys (=formunits%key%dim)
-    !  Make TFORM etc for each i like 96 main ones.
-
-    ittype = 0  ! 23 for TTYPE23 => colheads(ittype)
-    do ikey=1, size(colhead_keys)
-      select case(trim(colhead_keys(ikey)))
-      case('main') ! Special case (ASM main data), where %prm%root is ignored.
-        do irow=1, NWORDS_MAIN
-          sk = 'main'
-!print *,'DEBUG:524:irow=',irow
-!tmp_cha = get_ttype_main(irow)
-!print *,'DEBUG:52X:tmp_cha=',tmp_cha
-!print *,'DEBUG:525:ttb'
-!tmp_fu = get_element(sk, COL_FORM_UNITS)
-!print *,'DEBUG:526:ok'
-!print *,'DEBUG:527:tmp_fu',trim(tmp_fu%key)
-          ttype = get_ttype_main(irow)
-          ittype = ittype + 1
-if (ittype > nsiz) call err_exit_play_safe()
-          colheads(ittype) = t_asm_colhead(key=sk, type=trim(ttype), prm=get_element(sk, COL_FORM_UNITS))
-        end do
-      case default
-        call set_colheads_single(ittype+1, colhead_keys(ikey), colheads, index_last=ilast)
-        if (ilast < 0) then
-          ! The keyword was not found!
-          msg = 'Key='//trim(colhead_keys(ikey))//' is not defined in COL_FORM_UNITS (Failed in get_colheads).'
-          call err_exit_with_msg(msg)
-        end if
-        ittype = ilast
-if (ittype > nsiz) call err_exit_play_safe()
-      end select
-    end do
-
-    if (allocated(colhead_keys)) deallocate(colhead_keys)
-  end function get_colheads
-
-
-  ! Print the result of calc_proc_stats() to STDOUT
-  !
-  subroutine print_proc_stats(trows, relrows, frfrows)
-    type(asm_telem_row), dimension(:), intent(in) :: trows
-    type(asm_sfrow), dimension(:), intent(in) :: relrows
-    type(asm_frfrow), dimension(:), intent(in) :: frfrows
-    character(len=LEN_PROC_STATS), dimension(:), allocatable :: ar_strs_stats
-    integer :: j
-
-    ar_strs_stats = calc_proc_stats(trows, relrows, frfrows)  ! allocatable
-    write(*,'("----------- Processing Statistics -----------")')
-    do j=1, size(ar_strs_stats)
-      write(*,'(A)') trim(ar_strs_stats(j))
-    end do
-    write(*,'("---------------------------------------------")')
-    if (allocated(ar_strs_stats)) deallocate(ar_strs_stats)
-  end subroutine print_proc_stats
-
-  ! Returns String of process statistics
-  !
-  ! TODO: Discarded due to ASM at the beginning, end, middle
-  !
-  ! Note: Call print_proc_stats() to output to STDOUT
-  function calc_proc_stats(trows, sfrows, frfrows) result(strs_stats)
-    integer, parameter :: n_b4bd = 5, SIZE_FMT = size(INVALID_FMT)
-    type(asm_telem_row), dimension(:), intent(in) :: trows
-    type(asm_sfrow), dimension(:), intent(in) :: sfrows
-    type(asm_frfrow), dimension(:), intent(in) :: frfrows
-    character(len=LEN_PROC_STATS), dimension(n_b4bd+SIZE_FMT+2) :: strs_stats
-    character(len=LEN_PROC_STATS) :: s
-
-    logical, dimension(size(trows)) :: mask_tr
-    integer :: n_fr_output, n_tot, n_discarded
-    integer :: i, j, n, ifmt
-
-    n_fr_output = sum(sfrows%nframes, sfrows%is_valid)
-    write(s,'("Output/Discarded/Telemetry numbers of frames: ", I6, " /", I6, " /", I6)') &
-       n_fr_output, size(trows)-n_fr_output, size(trows)
-    strs_stats(n_b4bd-4) = s  ! Index=1
-    n = count(sfrows%is_valid)
-    n_discarded = size(sfrows)-n
-    write(s,'("Output/Discarded/Telemetry numbers of SFs: ", I5, " /", I5, " /", I5)') &
-       n, n_discarded, size(sfrows)
-    strs_stats(n_b4bd-3) = s  ! Index=2
-    strs_stats(n_b4bd-2) = '  (Note: SF number of Telemetry may not be strictly accurate.)' ! Index=3
-    write(s,'("FRF/matched(be4-discarded) numbers of SFs: ", I5, " /", I5)') &
-       size(frfrows), count(sfrows%with_frf)
-    strs_stats(n_b4bd-1) = s ! Index=4
-    strs_stats(n_b4bd)   = '  Breakdown: discarded due to:' ! Index=5
-    n_tot = 0
-    do ifmt=1, SIZE_FMT             ! Index=5..X
-      ! Counting the number of Frames for each "reason_invalid" (which is defined only when is_valid==.false.)
-      n = 0
-      do i=1, size(sfrows)
-        if (.not. sfrows(i)%is_valid) then
-          if (trim(sfrows(i)%reason_invalid%key) == trim(INVALID_FMT(ifmt)%key)) n = n + 1
-        end if
-      end do
-      write(s,'("    ",I5,": ",A)') n, trim(INVALID_FMT(ifmt)%desc)
-      strs_stats(n_b4bd+ifmt) = s
-      n_tot = n_tot + n
-    end do
-    write(s,'("    ",I5,"=(Total) (for sanity-check <=> ",I5,")")') n_tot, n_discarded
-    strs_stats(n_b4bd+SIZE_FMT+1) = s  ! Index: Last-1
-    write(s,'("Telemetry SFs without FRF counterparts vs undefined sfn: ",I5," <=> ",I5," (for sanity-check)")') &
-       count(.not. sfrows%with_frf), count(sfrows%frf%sfn < 0)
-    strs_stats(n_b4bd+SIZE_FMT+2) = s  ! Index: Last
-  end function calc_proc_stats
-
-  ! Inverse of get_onoff_enadis(). Returns either 0 or 1.
-  !
-  ! If neither, return a negative value (-999)
-  integer function get_0or1_from_onoff(val) result(iret)
-    character(len=*), intent(in) :: val
-
-    if (     (trim(val) == 'ON')  .or. (trim(val) == 'on')  .or. &
-             (trim(val) == 'ENA') .or. (trim(val) == 'ena')) then
-      iret = 1
-    else if ((trim(val) == 'OFF') .or. (trim(val) == 'off')  .or. &
-             (trim(val) == 'DIS') .or. (trim(val) == 'dis')) then
-      iret = 0
-    else
-      iret = UNDEF_INT
-      !write(stderr,'(A)') 'FATAL: Neither ON/OFF nor ENA/DIS: "'//trim(val)//'"'
-      !call EXIT(1)  ! for gfortran, Lahey Fujitsu Fortran 95, etc
-    end if
-  end function get_0or1_from_onoff
-
   !--------------------------------------------
-  ! get_onoff_enadis()
+  ! interface get_onoff_enadis()
   !--------------------------------------------
 
   ! Returns either 'ON' (OFF) or 'ENA' (DIS)
@@ -1682,34 +1661,5 @@ if (ittype > nsiz) call err_exit_play_safe()
     end if
   end function get_onoff_enadis_from_tf
 
-  ! Returns true if the environmental variable DEBUG is set and NOT 'false' or 'no'.
-  logical function IS_DEBUG() result(ret)
-    character(len=1024) :: env_debug
-    integer :: status
-    integer, save :: prev_result = -99
-
-    ! To avoid repeatedly accessing the system to get the environmental variable.
-    if (prev_result .ge. 0) then  ! This IF-statment is redundant (but is left for readability).
-      select case(prev_result)
-      case(0)
-        ret = .false.
-        return
-      case(1)
-        ret = .true.
-        return
-      end select
-    end if
-        
-    call GET_ENVIRONMENT_VARIABLE('GINGA_DEBUG', env_debug, STATUS=status)
-    if ((status == 1) .or. (status == 2)) then  ! 1 for non-existent, 2 for environment var. not-supported by the system
-      ret = .false.
-      prev_result = 0
-    else if ((trim(env_debug) == 'false') .or. (trim(env_debug) == 'no')) then  ! 1 for non-existent, 2 for environment var. not-supported by the system
-      prev_result = 0
-    else
-      ret = .true.
-      prev_result = 1
-    end if
-  end function IS_DEBUG
 end module asm_fits_common
 

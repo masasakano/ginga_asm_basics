@@ -3,102 +3,20 @@
 module asm_read_evt
   use err_exit
   use fort_util
-  !use asm_fits_common
-  !use asm_aux
+  use asm_consts
 
   implicit none 
 
-  !!! all copied from asm_fits_common
-  integer, parameter, public ::  dp8 = 8 ! FITS file REAL8
-  integer, parameter, public ::  ip4 = 4 ! "J" in FITSIO; FITS file INTEGER4
-  integer, parameter, public ::  ip2 = 2 ! "I" in FITSIO
-  integer, parameter, public :: MAX_FITS_CHAR = 68
-  integer, parameter, public :: NUM_INSTR = 6, NCHANS_PHA = 16, NCHANS_TIME = 8  ! Number of channels in each mode 
-  real(dp8),    parameter :: UNDEF_DOUBLE = -1024.0_dp8
-  integer, parameter :: LEN_READABLE_KEY = 32  ! Char-length of maximum human-readable key name
-  integer, parameter :: LEN_T_ARGV = 1024
+  ! NOTE:
+  ! This parameter is defined in COL_FORM_UNITS in asm_fits_common.f90
+  ! Therefore, ideally, the value should be read like this:
+  !    tmpfu = get_element('Tstart', COL_FORM_UNITS)
+  !    coltemplate = trim(tmpfu%root)
+  ! However, it is (re)defined here for simplicity and in order for
+  ! this routine not to require "use asm_fits_common'
+  character(len=*), parameter, private :: COLNAME_TSTART = 'Tstart'
+
 contains
-
-  !! simulated the one in asm_fits_common
-  !logical function IS_DEBUG() result(ret)
-  !  character(len=1024) :: env_debug
-  !  integer :: status = -999
-
-  !  env_debug = ''
-  !  !ret = .false.
-  !  !ret = .true.
-  !  call GET_ENVIRONMENT_VARIABLE('GINGA_DEBUG', env_debug, STATUS=status)
-  !  if ((status == 1) .or. (status == 2)) then  ! 1 for non-existent, 2 for environment var. not-supported by the system
-  !    ret = .false.
-  !  !else if ((trim(env_debug) == 'false') .or. (trim(env_debug) == 'no')) then  ! 1 for non-existent, 2 for environment var. not-supported by the system
-  !  !  ret = .false.
-  !  else
-  !    ret = .true.
-  !  end if
-  !end function IS_DEBUG
-
-  !!! Returns true if the environmental variable DEBUG is set and NOT 'false' or 'no'.
-  !!logical function IS_DEBUG() result(ret)
-  !!  character(len=1024) :: env_debug
-  !!  integer :: status
-  !!  integer, save :: prev_result = -99
-
-  !!  ! To avoid repeatedly accessing the system to get the environmental variable.
-  !!  if (prev_result .ge. 0) then  ! This IF-statment is redundant (but is left for readability).
-  !!    select case(prev_result)
-  !!    case(0)
-  !!      ret = .false.
-  !!      return
-  !!    case(1)
-  !!      ret = .true.
-  !!      return
-  !!    end select
-  !!  end if
-  !!      
-  !!  call GET_ENVIRONMENT_VARIABLE('GINGA_DEBUG', env_debug, STATUS=status)
-  !!  if ((status == 1) .or. (trim(env_debug) == 'false') .or. (trim(env_debug) == 'no')) then  ! 1 for non-existent, 2 for environment var. not-supported by the system
-  !!    ret = .false.
-  !!    prev_result = 0
-  !!  else
-  !!    ret = .true.
-  !!    prev_result = 1
-  !!  end if
-  !!end function IS_DEBUG
-
-  !!! simulated the one in asm_fits_common
-  !! dump all_argv
-  !subroutine dump_all_argv(rows, nargv)
-  !  character(len=*), parameter :: Subname = 'dump_all_argv'
-  !  type(t_argv), dimension(:), intent(in) :: rows
-  !  integer, intent(in), optional :: nargv  ! Optionally specify the size of the Array if it is not size(rows).
-  !  integer :: i, nsize_rows
-
-  !  nsize_rows = size(rows)
-  !  if (present(nargv)) then
-  !    if (nsize_rows < nargv) then
-  !      call err_exit_with_msg('('//Subname//') given nargv=('//trim(ladjusted_int(nargv))//') > '//trim(ladjusted_int(nsize_rows)))
-  !    end if
-  !    nsize_rows = nargv
-  !  else
-  !  end if
-  !  
-  !  print *, '--------- all argv (size=', size(rows), ') ---------' 
-  !  do i=1, nsize_rows
-  !    print *, trim(ladjusted_int(i))//': ('//trim(rows(i)%key)//') ', trim(rows(i)%val)
-  !  end do
-  !end subroutine dump_all_argv
-
-  !! simulated the one in asm_fits_common  ! Original: get_int_from_key_argv(key, ary)
-  !!function get_int_from_key(key, ary) result(iret)
-  !function get_int_from_val(key, ary) result(iret)
-  !  character(len=*), intent(in) :: key
-  !  type(t_argv), dimension(:), intent(in) :: ary
-  !  integer :: iret
-  !  character(len=LEN_T_ARGV) :: s
-
-  !  s = get_val_from_key(trim(key), ary)
-  !  read(s, '(I65)') iret
-  !end function get_int_from_key
 
   !------------------------------------------------------------
   ! Read multiple channels from FITS and returns a (Integer*2) 2-dim Array (value, detector) for the summed data
@@ -117,33 +35,23 @@ contains
     integer(kind=ip2) :: statusi2
     character(len=30) :: errtext
 
-    ! nullval = -999
-!if (IS_DEBUG()) print *,'DEBUG:3259: nrows=',trim(ladjusted_int(nrows)),' si=',size(tmpchs),' chan_l_h=',chan_l_h
     do idet=1, NUM_INSTR
       retchans(:, idet) = 0_ip2 
       do ich=chan_l_h(1), chan_l_h(2)
         colnum = (idet-1)*NCHANS_PHA + ich + 1   ! NCHANS_PHA defined in asm_fits_common
-!if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:3261: colnum=',colnum,' nrows=',nrows
         tmpchs = 0_ip2
         ! FiTs_GeT_Column_Value: FTGCV[SBIJKEDCM](unit,colnum,frow,felem,nelements,nullval, >values,anyf,status)
         !  anyf is True if any of the values is undefined.
         call FTGCVI(funit, colnum, 1, 1, nrows, 0, tmpchs, anyf, status)
         !call FTGCVI(funit, colnum, 1, 1, nrows, UNDEF_INT2, tmpchs, anyf, status)
-!if (.true.) then
         if (status .ne. 0) then
           call FTGERR(status, errtext)
-          write(stderr,'("ERROR: (",A,") Failed in FTGCVI() with Status=",A," (",A,"): colnum=",A)') &
+          write(stderr,'("WARNING: (",A,") Failed(1) in FTGCVI() with Status=",A," (",A,"): colnum=",A)') &
              Subname, trim(ladjusted_int(status)), trim(errtext), trim(ladjusted_int(colnum))
-
-!          call FTGCVI(funit, colnum, 1, 1, nrows, 0, tmpchs, anyf, status)
-!          if (status .ne. 0) then
-!            call FTGERR(int(status), errtext)
-!            write(stderr,'("ERROR: (",A,") Failed(2) in FTGCVI() with Status=",A," (",A,"): colnum=",A)') &
-!               Subname, trim(ladjusted_int(int(status))), trim(errtext), trim(ladjusted_int(colnum))
 
           !! ------------ Comment ------------
           !! Rerun FTGCVI() with INTEGER*2 status, and it may work if GINGA_DEBUG=1
-          !! There is no reason this works, when the others do not, but it seems to do so!
+          !! There is no reason this works, when the others do not, but it seemed to do so in some cases (in the past?)!
           call FTGCVI(funit, colnum, 1, 1, nrows, 0, tmpchs, anyf, statusi2)
           if (statusi2 .ne. 0) then
             call FTGERR(int(statusi2), errtext)
@@ -158,12 +66,7 @@ contains
 
         retchans(:, idet) = retchans(:, idet) + tmpchs
       end do
-!if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:3268: sum=',sum(retchans(:, idet)),' for idet=',trim(ladjusted_int(idet))
-!if (IS_DEBUG() .and. (idet == 5)) print *,'DEBUG:3269:  87(det=5)=',retchans( 87, idet)
-!if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:3269: 110(det=2)=',retchans(110, idet)
     end do
-!if (IS_DEBUG())                   print *,'DEBUG:3270:  87=',retchans(87, :)
-!if (IS_DEBUG())                   print *,'DEBUG:3270: 110=',retchans(110, :)
   end function get_asm_summed_chan
 
   !------------------------------------------------------------
@@ -183,14 +86,10 @@ contains
     character(len=1024) :: comment
     character(len=30) :: errtext
     character(len=MAX_FITS_CHAR) :: coltemplate
-!!! from asm_fits_common
-!    type(t_form_unit) :: tmpfu
     logical :: success_ftgiou
 
-!write(stderr,'("")', advance='no')
     success_ftgiou = .true.
     call FTGIOU(funit, status)
-!if (IS_DEBUG()) write(stderr,'("(",A,") UNIT= ",A)') Subname, trim(ladjusted_int(funit))
     if (status .ne. 0) then
       call FTGERR(status, errtext)
       write(stderr,'("WARNING: (",A,") Failed in ftgiou(): status= ",A," (",A,")")', advance='no') &
@@ -206,11 +105,7 @@ contains
         !success_ftgiou = .false.
       end if
     end if
-!funit = MY_FUNIT  ! DEBUG
-!if (IS_DEBUG()) print *,'DEBUG:278:funit=',funit,' fname=',trim(fname),' blocksize=',blocksize
     call FTOPEN(funit, trim(fname), 0, blocksize, status)  ! 0: readonly
-    !call FTOPEN(funit, trim(fname), 0, blocksize, status)  ! 0: readonly
-    !call ftopen(funit, fname, 0, blocksize, status)  ! 0: readonly
     call err_exit_if_status(status, 'Failed to open the FITS to read: '//trim(fname))
 
     ! Move to the 1st extention
@@ -232,20 +127,18 @@ contains
 
     allocate(outchans(nrows, NUM_INSTR, size(chans, 2))) ! (Row, Detector, Band)
     allocate(artime(nrows)) ! for Tstart
-!if (IS_DEBUG()) print *,'DEBUG:3245: out-sizes=',size(outchans, 1),' s2=',size(outchans, 2),' s3=',size(outchans, 3)
     outchans = -99
-    !artime = 0.0d0
+    artime = UNDEF_DOUBLE
 
     ! Get summed channle data
     do iband=1, size(chans, 2)
       outchans(:,:,iband) = get_asm_summed_chan(funit, chans(:, iband), nrows)
-!if (IS_DEBUG()) print *,'DEBUG:3369: iband=',iband,' sum=',sum(outchans(:,2,iband))
     end do
 
     ! Get Tstart (Time column)
-    !tmpfu = get_element('Tstart', COL_FORM_UNITS)
+    coltemplate = COLNAME_TSTART
+    !tmpfu = get_element('Tstart', COL_FORM_UNITS) ! better routine, but needs use asm_fits_common
     !coltemplate = trim(tmpfu%root)
-    coltemplate = 'Tstart'
 
     ! Get column number for Tstart (should be 97)
     ! FTGCNO(unit,casesen,coltemplate, > colnum,status) ! FiT_Get_Column_from_Name_to_nO
@@ -280,12 +173,12 @@ contains
     integer :: iy, idet, irow, iband, statustmp
     integer :: unit, colnum
     character(len=5), dimension(size(chans, 2)) :: strchs
+    logical :: success_ftgiou
 
     qdpfile = trim(outroot)//'.qdp'
     pcofile = trim(outroot)//'.pco'
     mjd_offset = artime(1)  ! The offset is the first row of artime (=Tstart in the ASM event file)
 
-!if (IS_DEBUG()) print *,'DEBUG:3142: out-beg sum=',sum(outchans(:,2,1))
     do iband=1,size(chans,2)
       if (chans(1, iband) == chans(2, iband)) then
         write(strchs(iband), '(I0.2)') chans(1, iband)
@@ -294,14 +187,14 @@ contains
       end if
     end do
 
+    success_ftgiou = .true.
     call FTGIOU(unit, status) ! Just get a safe IO unit
     if ((status .ne. 0) .and. ((unit > 999) .or. (unit < 9))) then
       write(stderr,'("WARNING: Failed in ftgiou(): unit = ",I12,". Manually reset to ",I3)') unit, MY_FUNIT
       unit = MY_FUNIT
+      success_ftgiou = .false.
     end if
-!unit = MY_FUNIT  ! DEBUG
 
-!if (IS_DEBUG()) print *,'DEBUG:3145: size1=',size(outchans,1),'sizes=',size(outchans, 2),' s3=',size(outchans, 3)
     ! QDP file
     open(UNIT=unit, file=qdpfile, IOSTAT=status, STATUS='UNKNOWN')  ! clobber=yes (i.e., overwrite, maybe)
     write(unit, '("@",A)') trim(basename(trim(pcofile)))
@@ -316,7 +209,6 @@ contains
     end do
     write(unit, '(A)') ''
 
-!if (IS_DEBUG()) print *,'DEBUG:3157: out-after sum=',sum(outchans(:,2,1))
     do irow=1, size(outchans, 1)
       write(unit, '('//Fmt_MJD//')', advance='no') artime(irow)-mjd_offset
       do idet=1, size(outchans, 2)
@@ -334,14 +226,6 @@ contains
     write(unit, '("LAB T ASM light curves (CH:",A,") from MJD=",'//Fmt_MJD//')') &
        trim(join_chars(strchs, ', ')), mjd_offset
     write(unit, '("LAB F ",A)') trim(basename(fname))
-    !iy = 1
-    do idet=1, size(outchans, 2)
-    !  do iband=1, size(outchans, 3)
-    !    iy = iy + 1
-    !    write(unit, '("LAB G",I1," Y"I1,"FW",I1,"_CH",A)') iy, mod(idet-1,2)+1, (idet-1)/2+1, strchs(iband)
-    !  end do
-     !write(unit, '("LAB G",I1," Y"I1,"FW",I1)') idet+1, mod(idet-1,2)+1, (idet-1)/2+1
-    end do
 
     ! If default (aka, 6 detectors for 2 bands):
     if ((size(outchans, 2) == 6) .and. (size(outchans, 3) == 2)) then
@@ -359,11 +243,11 @@ contains
         if (idet .ne. size(outchans, 2)) write(unit, '("lab nx off")')
       end do
     end if
-    write(unit, '("LAB X Tstart-MJD(=",'//Fmt_MJD//',")") [day]') mjd_offset
+    write(unit, '("LAB X Tstart-MJD(=",'//Fmt_MJD//',") [day]")') mjd_offset
     write(unit, '("R X")')
     
     close(UNIT=unit, IOSTAT=statustmp)
-    call FTFIOU(unit, statustmp)
+    if (success_ftgiou) call FTFIOU(unit, statustmp)
   end subroutine write_qdp
 
   !------------------------------------------------------------

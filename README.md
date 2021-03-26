@@ -1,29 +1,41 @@
 %readme
 
+This package provides the files (UNIX commands) to generate a Ginga-ASM event FITS file, combining the original telemetry file and (user-specified) corresponding Ginga-LAC FRF file, along with a few auxiliary commands, including the one to generate QDP/PCO files from the event FITS.
+
+They are mainly written for gfortran (Fortran 2008 standard). For testing, a B-sh and Python files are included.
+
+Clobber (permission for overwriting existing files) is set true in any actions.
+
+-----------
+
+## make ##
+
 To make,
 
-1. Set up the HEASOFT environment, including the required environmental variables.
+1. Set up the HEASOFT environment, including the required standard environmental variables.
 2. Adjust `src/Makefile` (directories, versions of the libraries, etc)
 3. `cd src; make`
-4. Executable `asmmkevt` is created in the src/ directory.
+4. A few executables, including the main command `asmmkevt`, are created in the src/ directory.
 
-To run, for example, in the src/ directory
+To run `asmmkevt`, for example, in the src/ directory
 
-    GINGA_CHATTER=4 ./asmmkevt ../../ginga_samples/ginga_sirius_P198804280220.fits \
-      ../../ginga_samples/FR880428.S0220.fits ../../ginga_samples/mkevt_out_test.fits
+    GINGA_CHATTER=4 ./asmmkevt ../samples/ginga_sirius_P198804280220.fits \
+      ../samples/FR880428.S0220.fits ~/mkevt_out.fits
 
 Usage is
 
     asmmkevt Teletry.fits FRF.fits output_asm_event_file.fits
     
+The input FITS files may be compressed like `.gz`
+
 ## Sub-program ##
 
 ### asmtelemetryout ###
 
 `asmtelemetryout` outputs for the period of data where ASM-Mode is ON. Run `asmtelemetryout` instead to output selected columns for the entire period:
 
-    GINGA_CHATTER=4 asmtelemetryout ../../ginga_samples/ginga_sirius_P198804280220.fits \
-      ../../ginga_samples/FR880428.S0220.fits ../../ginga_samples/asmtelemetry_try06.fits \
+    GINGA_CHATTER=4 asmtelemetryout ../samples/ginga_sirius_P198804280220.fits \
+      ../samples/FR880428.S0220.fits ~/telemetry_out.fits \
       Tstart SFNum SFNTelem Fr6bits FrameNum Mode_ASM Mode_PHA ModeSlew Status_C Status_S DP_C DP_S bitrate
 
 You can view the options with
@@ -59,13 +71,14 @@ Make sure all the HEADAS environmental variables are set and `src/Makefile` and 
     % cd src/
     % make
     % make test
+    %
     % env GINGA_CHATTER=4 ./asmmkevt ../samples/ginga_sirius_P198804280220.fits.gz ../samples/FR880428.S0220.fits.gz /tmp/asmevt.fits
     % env GINGA_CHATTER=4 ./asmtelemetryout ../samples/ginga_sirius_P198804280220.fits.gz ../samples/FR880428.S0220.fits.gz /tmp/asmtel.fits Tstart SFNum SFNTelem Fr6bits Mode_ASM Mode_PHA ModeSlew ModeSleM ModeSleP Status_C Status_S DP_C DP_S bitrate
     % ./asm2qdp /tmp/asmevt.fits /tmp/asmqdp_def
     % ./asm2qdp /tmp/asmevt.fits /tmp/asmqdp_4_13 4 13
     %
     % cd /tmp
-    % fplot /tmp/asmtel.fits+1 xparm=- yparm="Tstart SFNum Mode_ASM Mode_PHA ModeSlew ModeSleM ModeSleW" rows=- device=/xw
+    % fplot /tmp/asmtel.fits+1 xparm=- yparm="Tstart SFNum Mode_ASM Mode_PHA ModeSlew ModeSleM ModeSleP" rows=- device=/xw
     %
     % qdp /tmp/asmqdp_def
     %
@@ -75,7 +88,7 @@ Make sure all the HEADAS environmental variables are set and `src/Makefile` and 
 
 To run tests,
 
-1. Set up the HEASOFT environment, including the required environmental variables.
+1. Set up the HEASOFT environment, including the required standard environmental variables.
 2. Adjust `test/Makefile` (directories, versions of the libraries, etc)
 3. `cd test; make test` or alternatively, `cd src; make test`  
    Whichever, the standard `make` is run first before the test is executed.  
@@ -94,16 +107,28 @@ You may set the environmental variable `GINGA_DEBUG` for testing.  Some diagnost
 
 ## Source files ##
 
+### Main programs for UNIX commands ###
+
+* `asmmkevt.f90`: Main program to create an ASM event FITS from a telemetry and LAC-FRF files.
+* `asm2qdp`: Creates a QDP and associated PCO files from an ASM event FITS.
+* `asmtelemetryout`: Creates a table FITS of specified columns for the entire period of a telemetry FITS.
+* `mjd2date`: Auxiliary command to convert MJD to Date, using `mjd.f` of `ginga_tools`.
+* `date2mjd`: Auxiliary command to convert Date to MJD, using `mjd.f` of `ginga_tools`.
+
+### Library programs ###
+
 * `asm_aux.f90`: Auxiliary functions/subroutines specific in this package (NOT Fortran-generic utility).
+* `asm_consts.f90`: Most basic and common constants used in this package.
 * `asm_fits_common.f90`: Define FITS-related types and constant variables and common basic routines.
 * `asm_fitsout.f90`: Anything to do with outputting FITS files and with merging processing.
 * `asm_read_evt.f90`: Read a generated ASM event FITS and output it as a pair of QDP/PCO.
 * `asm_read_telemetry.f90`: Anything to do with reading FITS files.
-* `asmdump.f90`: Obsolete and unused.
-* `asmmkevt.f90`: Main program to deal with the command-line arguments and run the process.
 * `err_exit.f90`: Error handling routines.
 * `fort_util.f90`: General Fortran90 utility routines.
-* `test/*.{f90,sh,py}` : For unit and integration testings.
+
+### Test programs ###
+
+* `test/*.{f90,sh,py}` : For unit and integration tests.
 
 ## Further read ##
 

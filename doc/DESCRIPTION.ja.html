@@ -49,7 +49,8 @@
 <h1 data-number="1"><span class="header-section-number">1</span> 背景と用語定義</h1>
 <p>目的は、GingaのTelemetry FITSを読み込み、対応する Ginga LAC FRFにある姿勢関係情報を付け加えて、ASMデータをFITS tableとして出力すること。</p>
 <ul>
-<li><code>asmmkevt</code> : 本プログラム。ASM-mode がONの時のデータのみ抽出。</li>
+<li><code>asmmkevt</code> : 本プログラム。ASM-mode がONの時のデータのみ抽出して、ASM event FITSを作成。</li>
+<li><code>asm2qdp</code> : 副プログラム。ASM event FITSから、QDP/PCO ファイルを作成。</li>
 <li><code>asmtelemetryout</code> : 副プログラム。Telemetry FITSにある全データ時間領域について、ただし、指定したパラメーターのテーブルのみ出力(パラメーターを全く与えなければ、<code>asmmkevt</code> と同様に全パラメーターが出力される)。</li>
 </ul>
 <p>いずれも <code>-h</code> オプションだけ与えると、ヘルプメッセージが表示される。</p>
@@ -116,7 +117,7 @@
 <p>ASM-modeの時のメインデータの構造は、以下に定義されている。</p>
 <ul>
 <li>PHA Mode : Table 5.5.5, pp.233</li>
-<li>Time Modeta: Table 5.5.6, pp.234</li>
+<li>Time Mode: Table 5.5.6, pp.234</li>
 </ul>
 <hr />
 </section>
@@ -168,7 +169,7 @@
 <li>ほとんどのTTYPEについては、対応する<code>COL_FORM_UNITS</code>のメンバー“root”(および“key”)と一致する。ただし、たとえば“Euler”であれば、<code>COL_FORM_UNITS%root</code>は“Euler”であるのに対し、この変数のメンバー“type”は、“Euler1”, “Euler2”など、具体的に指すもの(そしてFITS fileに出力するもの)によって変わる。</li>
 </ul></li>
 </ul>
-<p>したがって、将来的にたとえばSlew modeのBIT番号を変更したいなどの場合、上のtypesを変更するとよい。</p>
+<p>したがって、将来的にたとえば〇〇modeのBIT番号を変更したいなどの場合、上のtypesを変更するとよい。</p>
 </section>
 <section id="他の主要type-s-特に読み込んだり計算したデータを保持するもの" class="level1" data-number="5">
 <h1 data-number="5"><span class="header-section-number">5</span> 他の主要type-s (特に読み込んだり計算したデータを保持するもの)</h1>
@@ -201,10 +202,10 @@
 <section id="アルゴリズム" class="level1" data-number="6">
 <h1 data-number="6"><span class="header-section-number">6</span> アルゴリズム</h1>
 <ol type="1">
-<li>主プログラム(<code>asmmkevt.f90</code>, <code>asmtelemetryout.f90</code>)
+<li>主プログラム(<code>asmmkevt.f90</code>, <code>asmtelemetryout.f90</code>, <code>asm2qdp.f90</code>)
 <ul>
 <li>コマンドライン引数の処理、出力FITSファイルのopen/closeが主な仕事</li>
-<li>その間に、大雑把に言って以下の二つのmodulesで定義された関数やサブルーチンを呼ぶ。</li>
+<li>その間に、(<code>asm2qdp.f90</code>を除き)大雑把に言って以下の二つのmodulesで定義された関数やサブルーチンを呼ぶ。</li>
 </ul></li>
 <li>Module <code>asm_read_telemetry.f90</code>: Telemetry FITS と FRF FITSの読み込み
 <ul>
@@ -233,7 +234,12 @@
 </ul></li>
 <li>Module <code>asm_fits_common.f90</code>: 上の二つのmodulesの事実上の親となるmodule。基本的なルーチンや共通ルーチンはこちらに定義されている。
 <ul>
+<li>最も基本的な定数は、`<code>asm_consts.f90</code> にていぎされている。</li>
 <li>その中で、<code>get_index()</code> (とそのラッパーである<code>get_element()</code>)は、変数を抽象化して、Ruby/PerlのHash (PythonのDictionary)のように扱うためのinterface。実は、Fortran 2008 (gfortranではすでに対応済み)では、組込関数 <code>FINDLOC()</code>として似たような機能が実装されていたことをあとになって知った。</li>
+</ul></li>
+<li>Module <code>asm_read_evt.f90</code>: <code>asm2qdp.f90</code> の核となるModule。
+<ul>
+<li>ASM event file の読み込みと、QDP/PCO filesの書き出し。</li>
 </ul></li>
 <li>その他のユーティリティModules
 <ul>
@@ -251,6 +257,7 @@
 <p>FormatはASTRO-C(Ginga)中間報告書 Table 5.1.3, pp.201。端的には上位2 bitsがSF番号(わずか0〜3だけで回転)、下位6 bitsがFrame番号である。</p>
 <p>Frame番号は、各SFにつき、0〜63まで順番に回っていく。SF番号は、0〜3で回っていく……が、たまに不連続になったりあるいは同じSF番号が異なるはずのSFで連続するケースが認められた(bitrate が変化した時らしい)。</p>
 <p>FRF においてつけられる、SF番号は、Telemetry FITSの(Frame番号から推測した)SFの通し番号と一致するように見える。たとえば、FRFの方で途中の(ある時間帯の)データに欠落があっても、その時間帯の後のデータでは、SFの通し番号がTelemetry FITSから予想される番号と一致する。がただし、FRFの方がSFsの数がずっと多いケースもあった。</p>
+<p>Telemetryにおいては、framesは、基本的に欠落なく、各SFごとに64 framesあるはずながら、保証はされていない。特に(storedではなく)リアルデータの場合、欠落があり得る。もっともありがちな欠落のタイミングは、データの初め、終わり、および中間の(地上の受信)アンテナ反転の時。</p>
 </section>
 <section id="frfとのマッチング" class="level2" data-number="7.2">
 <h2 data-number="7.2"><span class="header-section-number">7.2</span> FRFとのマッチング</h2>

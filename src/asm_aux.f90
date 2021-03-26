@@ -1,6 +1,7 @@
 ! Auxiliary routines for handling ASM-related data
 !
 module asm_aux
+  use asm_consts
   use asm_fits_common
   implicit none 
 

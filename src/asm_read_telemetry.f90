@@ -3,13 +3,13 @@
 module asm_read_telemetry
   use err_exit
   use fort_util
+  use asm_consts
   use asm_fits_common
   use asm_aux
 
   implicit none 
 
-  integer, parameter, private :: MAXAXES = 2
-  integer, parameter :: NBYTESFORHEADER = 16
+  integer, parameter, private :: Maxaxes = 2
 contains
 
   integer function get_safe_unit(defunit) result(funit)
@@ -46,6 +46,7 @@ contains
     end if
   end function get_safe_unit
 
+  !------------------------------------------------------------
   ! Make and get fits_header and asm_telem_row of the telemetry from File
   !
   ! Returns an Array of the Telemetry object and corresponding FITS-header object.
@@ -54,6 +55,7 @@ contains
   !   read_telemetry()
   !   get_telem_raws2types()
   !   add_mjd2telem()
+  !------------------------------------------------------------
   subroutine mk_telem_rows(fname, tfhead, telm_rows)
     character(*), intent(in) :: fname  ! Telemetry filename
     type(fits_header), intent(out) :: tfhead
@@ -69,12 +71,14 @@ contains
   end subroutine mk_telem_rows
 
 
+  !------------------------------------------------------------
   ! Make and get FRF fits_header and asm_frfrow from a FRF File
   !
   ! Returns an Array of the FRF object and corresponding FITS-header object.
   !
   ! Essentially, a wrapper.
   !
+  !------------------------------------------------------------
   subroutine mk_frf_rows(fname, frfhead, frfrows)
     character(*), intent(in) :: fname  ! FRF filename
     type(fits_header), intent(out) :: frfhead
@@ -85,7 +89,9 @@ contains
   end subroutine mk_frf_rows
 
 
+  !------------------------------------------------------------
   ! Returns FRF FITS-header object
+  !------------------------------------------------------------
   function get_frf_head(fname) result(frfhead)
     integer, parameter :: MY_FUNIT = 157  ! arbitrary
     character(*), intent(in) :: fname  ! FRF filename
@@ -122,11 +128,11 @@ contains
     frfhead%TOTSFFRF%val = frfhead%TOTAL_SF%val
 
     call ftclos(funit, status)
-    ! call FTGERR(status, errtext)
     call ftfiou(funit, status)
   end function get_frf_head
 
 
+  !------------------------------------------------------------
   ! Read telemetry file and RETURN headers, telems
   !
   ! Description:
@@ -138,6 +144,7 @@ contains
   !   e.g., the byte value 255 (0b11111111) appears to be -1 as opposed to 255.
   !   Use fort_util::unsigned1_to_int4() to convert it (scalar or Array)
   !   into a standard Integer(kind=4) (scalar/Array).
+  !------------------------------------------------------------
   subroutine read_telemetry(fname, fhead, headers, telems)
     integer, parameter :: MY_FUNIT = 156  ! arbitrary
     character(*), intent(in) :: fname  ! Telemetry filename
@@ -149,7 +156,7 @@ contains
     integer :: nrows = -99
     integer :: datacode, repeat, num_axis, width
     integer(kind=4) :: nbytes
-    integer, dimension(MAXAXES) :: naxes
+    integer, dimension(Maxaxes) :: naxes
     character(len=1024) :: errmsg
     character(len=80) :: comment, snull, msg
     integer :: i, j, nc
@@ -159,19 +166,15 @@ contains
     ! Open and move to the 1st extension
     call ftopen(funit, fname, 0, blocksize, status)  ! 0: readonly
     call err_exit_if_status(status, 'Failed to open the FITS: '//trim(fname))
-!WRITE (*,'("DEBUG: blocksize=", i0)') blocksize
     call FTMAHD(funit, 2, hdutype, status)           ! Move to the 1st extention
-!WRITE (*,'("DEBUG: hdutype=",   i0)') hdutype
     call err_exit_if_status(status, 'Failed to move to the 1st extension: '//trim(fname))
 
     !------ Read header keywords
 
     call ftgkyj(funit, fhead%FRAMES%name, fhead%FRAMES%val, fhead%FRAMES%comment, status)  ! "ftgkyj" for Integer
-!WRITE (*,'("DEBUG: Number of frames=", i6, " / ", a)') fhead%FRAMES%val, trim(fhead%FRAMES%comment)
 
     call ftgkys(funit, fhead%DATE__OBS%name, fhead%DATE__OBS%val, fhead%DATE__OBS%comment, status)
     call err_exit_if_status(status, 'Failed to get DATE-OBS in '//trim(fname))
-!WRITE (*,*) 'DEBUG: DATE-OBS: ' // trim(fhead%DATE__OBS%val)
 
     ! FiTs_Get_Number_of_RoWs
     call FTGNRW(funit, nrows, status) ! cf. FTGNRWLL() for INT*64
@@ -193,7 +196,7 @@ contains
 
     ! FiTs_GeT_CoLumn (Get the datatype of a column): FTGTCL(unit,colnum, > datacode,repeat,width,status)
     call FTGTCL(funit, 1, datacode, repeat, width, status)
-    if ((datacode .ne. 11) .or. (repeat .ne. nbytespercard)) then  ! namely, if TFORM1 != '144B'
+    if ((datacode .ne. 11) .or. (repeat .ne. NBYTESPERCARD)) then  ! namely, if TFORM1 != '144B'
       errmsg = 'The format (TFORM1) is not 144B.'
       call err_exit_with_msg(errmsg)
       stop  ! redundant
@@ -213,23 +216,12 @@ contains
     fhead%INSTRUME%val = 'ASM'
     fhead%FILENAME%val = trim(basename(fname))
 
-if (IS_DEBUG()) then ! in asm_fits_common
-print *,'DEBUG:9232: fhead:'
-call dump_type(fhead, 1) !! DEBUG
-end if
     naxes = (/ (-999, i = 1, size(naxes)) /)
     ! FiTs_Get_Table_DiMension
-    call FTGTDM(funit, 1, maxaxes, num_axis, naxes, status)
+    call FTGTDM(funit, 1, Maxaxes, num_axis, naxes, status)
     call err_exit_if_status(status, 'Failed to get Table dimension')
 
-    !!! Comment: num_axis is NOT 2 but 1: naxes == (144, UNDEFINED)
-    !if (num_axis .ne. 2) then 
-    !  print *, 'nrows = nfields = ', nrows
-    !  print *, 'naxes = ', naxes
-    !  write(errmsg, '("NAXIS is not 2 but ", i8)') num_axis
-    !  call err_exit_with_msg(errmsg)
-    !  stop  ! redundant
-    !end if
+    ! Comment: num_axis is NOT 2 but 1: naxes == (144, UNDEFINED)
 
     nbytes = naxes(1)*nrows
     allocate(ardata(nbytes), STAT=status)
@@ -239,20 +231,17 @@ end if
     call FTGTBB(funit, 1, 1, nbytes, ardata, status)
     call err_exit_if_status(status, 'Failed to get Table dimension')
 
-    allocate(headers(nbytesforheader, nrows), STAT=status)
-    allocate(telems( nbytespercard  , nrows), STAT=status)
+    allocate(headers(NBYTESFORHEADER, nrows), STAT=status)
+    allocate(telems( NBYTESPERCARD  , nrows), STAT=status)
 
-    !print *, 'DEBUG(01): nrows=nfields=', nrows
     do i=1, nrows ! 144 per card (header + telemetry-block)
-      j = (i-1)*nbytespercard + 1
+      j = (i-1)*NBYTESPERCARD + 1
       if (i .gt. 12030) then
-    !   print *, 'DEBUG(02): i,j= ', i, j
       end if
 
       headers(:, i) = ardata(j:j+15)     ! Timestamp info etc
       telems( :, i) = ardata(j+16:j+143) ! Main telemetry data
     end do
-    !print *, 'DEBUG(03): after-loop '
     if (allocated(ardata)) deallocate(ardata, STAT=status)
 
     call ftclos(funit, status)
@@ -260,6 +249,7 @@ end if
 
   end subroutine read_telemetry
 
+  !------------------------------------------------------------
   ! Raw telemetry arrays to an Array of type(asm_telem_row)
   !
   ! Description:
@@ -271,6 +261,7 @@ end if
   !   into a standard Integeri (scalar/Array).
   ! 
   !   Here it is converted into an Array of type(asm_telem_row) with INTEGER*4 
+  !------------------------------------------------------------
   function get_telem_raws2types(headers, telems) result(retrows)
     integer(kind=1), dimension(:, :), allocatable, intent(in) :: headers, telems ! (word(=byte), row)
     type(asm_telem_row), dimension(size(headers, 2)) :: retrows
@@ -351,8 +342,9 @@ end if
     end do
   end function get_telem_raws2types
 
+  !------------------------------------------------------------
   ! Add trows%mjd (Real*8) and trows%year (like 1989 (Integer*4))
-  !
+  !------------------------------------------------------------
   subroutine add_mjd2telem(tfhead, trows)
     type(fits_header), intent(in) :: tfhead
     type(asm_telem_row), dimension(:), intent(inout) :: trows
@@ -409,18 +401,19 @@ end if
             , trows(irowt)%second  &
             , trows(irowt)%millisec_i4 ]
       trows(irowt)%year = year_cur
-!print *,'DEBUG:147: irowt=',irowt,' time=',time
+
       call MJULIA(time, mjd)  ! mjd.f in ginga_tool
-!print *,'DEBUG:148: mjd=',mjd
       trows(irowt)%mjd  = mjd
     end do
     write (*, *)  ! To clear advance='no' in write()
   end subroutine add_mjd2telem
 
 
+  !------------------------------------------------------------
   ! Read FRF and RETURN an allocated Array of type(asm_frfrow).
   !
   ! Description:
+  !------------------------------------------------------------
   function get_frf_types(fname) result(frfrows)
     integer, parameter :: MY_FUNIT = 151  ! arbitrary
     character(len=*), intent(in) :: fname  ! Telemetry filename
@@ -431,7 +424,7 @@ end if
     integer :: ncols = -99, nrows = -99
     integer :: datacode, repeat, num_axis, width
     integer(kind=4) :: nbytes
-    integer, dimension(MAXAXES) :: naxes
+    integer, dimension(Maxaxes) :: naxes
     character(len=1024) :: errmsg
     character(len=1024) :: s, s1, s2
     character(len=80) :: comment, snull, msg
@@ -443,7 +436,6 @@ end if
     INTEGER :: SUNPS(4),EFLAGS(4),NSAMPL, isampl
     real(kind=dp8) :: MJD, MJDS(4)  ! MJD is dummy
     real(kind=dp8) :: RBUFFS(17,4), ELVYS(4)
-    !DOUBLE PRECISION    MJD,MJDS(4)
 
     funit = get_safe_unit(MY_FUNIT)
 
@@ -452,13 +444,11 @@ end if
     call FTGNRW(funit, nrows, status) ! cf. FTGNRWLL() for INT*64
 
     allocate(frfrows(nrows), STAT=status)
-!print *, 'DEBUG: nrows=', nrows
 
     call SFGET(cond)  ! Next SABU-Frame  ! cond is set 0(Normal) or 9(EOF, data are not set)
 
     irow = 0
     do while(cond .eq. 0)  ! cond is set at the end of the last loop.
-!do i=1, 3  !!!!!!!!!!!!!!! 1--3 for testing/DEBUG
       irow = irow + 1
       call GETOAT(MJD, BITRAT, MJDS,RBUFFS,SUNPS,ELVYS,EFLAGS,NSAMPL) ! MJD, BITRAT are dummy.
         !!! From frfread.F
@@ -480,15 +470,6 @@ end if
         !  NSAMPL (OUT): NUMBER OF THE ORBIT AND ATTITUDE DATA                  
         !                NSAMPL=1 FOR BITRATE H,M ,  =4 FOR BITRATE L           
       call SFCHCK(sync, lostf, sfn, bitrat, relstr, times)
-
-!if (irow .le. 3) then
-!  WRITE (s,'("19",i2,"-",i0.2,"-",i2," ",i0.2,":",i2,":",i2,".",i0.3)') times(1:7)
-!  WRITE (*,'("--- Iteration: ", i1, " SFN=", i4, " MJD= ",a)') i, sfn, trim(s)
-!  WRITE (*,'("MJDs=(", es17.9, ",", es17.9, ",", es17.9, ",", es17.9, ")")') mjds
-!  WRITE (*,'("Euler1/", i1, "(1)=", f10.5)') nsampl, rbuffs(1,nsampl)
-!  WRITE (*,'("Euler1/", i1, "(2)=", f10.5)') nsampl, rbuffs(2,nsampl)
-!  WRITE (*,'("Euler1/", i1, "(3)=", f10.5)') nsampl, rbuffs(3,nsampl)
-!end if
 
       !! See type(asm_frfrow) in asm_fits_common.f90
       frfrows(irow)%sync = sync      ! Array(0:63), 0=OK, 1=NG

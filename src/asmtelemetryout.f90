@@ -4,6 +4,7 @@ program asmtelemetryout
 
   use err_exit
   use fort_util
+  use asm_consts
   use asm_fits_common
   use asm_aux
   use asm_read_telemetry

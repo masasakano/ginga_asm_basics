@@ -142,6 +142,7 @@ module test_fits_common
   use unittest
   use err_exit
   use test_common
+  use asm_consts
   use asm_fits_common
 
   implicit none 
@@ -382,6 +383,7 @@ module test_read_telemetry
   use unittest
   use err_exit
   use test_common
+  use asm_consts
   use asm_fits_common
   use asm_read_telemetry
 
@@ -689,6 +691,7 @@ module test_asm_fitsout
   use unittest
   use err_exit
   use test_common
+  use asm_consts
   use asm_fits_common
   use asm_read_telemetry  ! required
   use asm_fitsout

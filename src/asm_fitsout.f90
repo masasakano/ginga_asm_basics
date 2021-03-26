@@ -6,33 +6,12 @@ module asm_fitsout
   use iso_fortran_env, only : stderr=>ERROR_UNIT
   use err_exit
   use fort_util
+  use asm_consts
   use asm_fits_common
   implicit none 
 contains
 
-  ! Table5.5.5-6 (pp.233-234)
-  subroutine fill_asm_one(isabu, itotrow, i_fr64, telems, arout)
-    implicit none
-    integer, intent(in) :: isabu, itotrow, i_fr64
-    integer(kind=1), dimension(:, :),  intent(in) :: telems
-    type(asm_telem_row), dimension(:, :), intent(inout) :: arout  ! (iSabuFrame, Row)
-
-    integer :: idet, ich, i_tele, i_out
-
-    do idet=1, NUM_INSTR  ! =6
-      do ich=1, NCHANS_TIME  ! =8
-        i_tele = (idet-1)*2 + (ich-1)*16 + 5
-        i_out = (idet-1)*NCHANS_PHA + ich
-        arout(isabu, i_fr64)%asmdats(i_out) = telems(itotrow, i_tele)
-            
-        i_tele = (idet-1)*2 + (ich-1)*16 + 6
-        i_out = (idet-1)*NCHANS_PHA + ich + 8
-        arout(isabu, i_fr64)%asmdats(i_out) = telems(itotrow, i_tele)
-      end do
-    end do
-  end subroutine fill_asm_one
-
-
+  !------------------------------------------------------------
   ! Gets the initialized type(asm_sfrow) purely based on an asm_telem_row object
   !
   ! Basically, type(asm_sfrow) is an array with the index being a row
@@ -65,6 +44,7 @@ contains
   ! anyway because their "lostf" is non-zero (all the frames from Frame29
   ! onwards are missing in SF5).
   !
+  !------------------------------------------------------------
   function get_ams_sfrow_init(trows) result(rets)
     type(asm_telem_row), dimension(:), intent(in) :: trows
     type(asm_sfrow), dimension(:), allocatable :: rets
@@ -96,7 +76,6 @@ contains
         fr6bit_prev = trows(irowt)%fr_6bit
         cycle
       end if
-!if (irowt < 300) print *, 'DEBUG:692: (row=', irowt,') iret=',iret,' prev2bit=',sf2bit_prev, ' 2bit=', trows(irowt)%sf_2bit
 
       ! Now this frame belongs to a new SF.
       if (iret > 0) rows2init(iret)%nframes = nframes  ! Set nFrames for the previous one.
@@ -106,12 +85,11 @@ contains
       fr6bit_prev = trows(irowt)%fr_6bit
       rows2init(iret) = asm_sfrow(irowt=irowt, sf2bits=trows(irowt)%sf_2bit)
     end do
-!print *, 'DEBUG:795: iret=',iret
 
     if (iret > 0) rows2init(iret)%nframes = nframes  ! Set nFrames for the last one
 
     allocate(rets(iret), STAT=status)
-!print *, 'DEBUG:796: iret=',iret, ' size(rets)=', size(rets)
+
     rets(:) = rows2init(1:iret)
     rets(:)%sfntelem = (/ (i, i=1, iret) /)
 
@@ -122,8 +100,9 @@ contains
     end if
   end function get_ams_sfrow_init
 
+  !------------------------------------------------------------
   ! Returns TRUE if the MJD difference between FRF and Telemetry is small enough.
-  !
+  !------------------------------------------------------------
   logical function is_frf_mjd_similar(exp, act, irowf, msgt, match, factor)
     real(dp8), intent(in) :: exp, act
     integer(ip4), intent(in) :: irowf ! Row-number of FRF
@@ -166,25 +145,23 @@ contains
       end if
 
       is_frf_mjd_similar = .true.
-!print *, 'DEBUG:537: irowf=',irowf, ' ret=', is_frf_mjd_similar
       return
     end if
   end function is_frf_mjd_similar
 
+  !------------------------------------------------------------
   ! Gets the row-number of the FRF that matches the given Telemetry row
   !
   ! If not found, a negative value is returned.
   !
   ! Only the first element of frows%mjds is considered.
   ! (n.b., the elements 2-4 are valid only for Low-Bitrate, which is very rare.)
-  !
+  !------------------------------------------------------------
   integer(ip4) function get_matched_frfrow(irowt, trows, frows) result(retrow)
-  !integer(ip4) function get_matched_frfrow(mjd, frows, irowt) result(retrow)
+    integer(ip4), intent(in) :: irowt
     type(asm_telem_row), dimension(:), intent(in) :: trows
-    !real(dp8), intent(in) :: mjd
     real(dp8) :: mjd
     type(asm_frfrow), dimension(:), intent(in) :: frows
-    integer(ip4), intent(in), optional :: irowt ! Row-number of Telemetry (for warning info purpose only)
 
     real(dp8) :: diff
     integer :: irow
@@ -193,28 +170,17 @@ contains
 
     mjd = trows(irowt)%mjd
     retrow = -99
-!if (irowt > 95) print *,'DEBUG:429: irowt=',irowt,' mjd=',mjd
-!if (irowt > 95) print *,'DEBUG:430: irowt=',irowt,' size(frows)=',size(frows),' fr(1)mjd=',frows(1)%mjds(1)
     do irow=1, size(frows)
-!if (irowt > 95) print *,'DEBUG:431: irowt=',irowt,' irow=',irow,' fr(irow)mjd=',frows(irow)%mjds(1)
       if (mjd == frows(irow)%mjds(1)) then
-!if (irowt > 95) print *,'DEBUG:432: FOUND: irowt=',irowt,' irow=',irow
         retrow = irow
         return
       else if (mjd < frows(irow)%mjds(1)) then
-!if ((irow > 1).and.(irowt>95)) print *,'DEBUG:434: to return unfound; irow=',irow,' mjd=',mjd,' FRF-mjd(-1)=',frows(irow-1)%mjds(1)
-!if (irowt > 95) print *,'DEBUG:435: to return unfound; irow=',irow,' mjd=',mjd,' FRF-mjd(__)=',frows(irow)%mjds(1)
         write(msg, '("Telemetry(row=",I5,", Frame(0-63)=", I0.2, ")")') irowt, trows(irow)%fr_6bit;
         ! MJD in the current FRF-Row is larger than the MJD compared with.
         ! If the current one is just infinitesimally different (due to
         ! the floating-point calculation issue), match it.
-!if ((irow < 4).and.(irowt>95)) then 
-!  tf = is_frf_mjd_similar(mjd, frows(irow)%mjds(1), irow, msg, match=.true.)
-!  print *,'DEBUG:437: irow=',irow,' irowt=',irowt,' tf=', tf
-!end if
         if (is_frf_mjd_similar(mjd, frows(irow)%mjds(1), irow, msg, match=.true.)) then
           retrow = irow
-!print *,'DEBUG:442: irow=',irow,' irowt=',irowt,' ret-T'
           return
         end if
 
@@ -226,13 +192,11 @@ contains
         ! If that is the case, match it.
         if (is_frf_mjd_similar(mjd, frows(irow-1)%mjds(1), irow-1, msg, match=.true.)) then
           retrow = irow - 1
-!print *,'DEBUG:443: irow-1=',irow-1,' irowt=',irowt,' ret-T2'
           return
         end if
 
         ! See if the last one is close by 0.001 sec (=1 ms) to the Telemetry one. (cf. 62.5 ms/frame for H-bit)
         if (is_frf_mjd_similar(mjd, frows(irow-1)%mjds(1), irow-1, msg, match=.false., factor=1.d0)) then
-!print *,'DEBUG:444: irow-1=',irow-1,' irowt=',irowt,' ret-F'
           write(stderr, '("WARNING: This time difference is too large for a floating error!")')  ! Extra warning (in addition to that in is_frf_mjd_similar()).
           return
         end if
@@ -242,7 +206,6 @@ contains
         ! Note this is skipped when irow==1
         if (is_frf_mjd_similar(mjd, frows(irow)%mjds(1), irow, msg, match=.false., factor=1.d0)) then
           write(stderr, '("WARNING: This time difference is too large for a floating error!")')  ! Extra warning (in addition to that in is_frf_mjd_similar()).
-print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
           return
         end if
 
@@ -251,6 +214,7 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     end do
   end function get_matched_frfrow
 
+  !------------------------------------------------------------
   ! Gets Array of type(asm_sfrow), matching Telemetry with FRF
   !
   ! The number of the rows (aka SFs) in the returned array is based on
@@ -259,6 +223,7 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
   ! NOTE: mjds obtained from FRF are for the time in the middle of the SF.
   !   In other words, the start time of the 32nd frame (64 frames/SF).
   !
+  !------------------------------------------------------------
   function get_asm_sfrow(trows, frows) result(retrows)
     type(asm_telem_row), dimension(:), intent(in) :: trows
     type(asm_frfrow), dimension(:), intent(in) :: frows
@@ -274,7 +239,6 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
 
     retrows = get_ams_sfrow_init(trows) ! allocated and initialized
 
-!print *,'DEBUG:390: get-init'
     do irowr=1, size(retrows)
       ! Full 64 frames do not exist in Telemetry (This SHOULD have been already detected with "lostf")
       if (retrows(irowr)%nframes < NFRAMES_PER_SF) then ! defined in asm_fits_common
@@ -292,13 +256,7 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
       ! Gets the 32nd frame (=64/2, where 64 frames/SF), as its time is the mjds in FRF.
       irowt = get_telem_row_index_from_fr(NFRAMES_PER_SF/2, trows, retrows(irowr)%irowt, retrows(irowr)%nframes) ! defined in asm_fits_common
 
-!do irowt=1, min(3, size(retrows))  !! DEBUG
-      ! irowf = get_matched_frfrow(trows(irowt)%mjd, frows, irowt)
-!if (irowt > 95) print *,'DEBUG:391: irowt=', irowt
       irowf = get_matched_frfrow(irowt, trows, frows)
-!if ((irowt > 95) .and. irowf > 0) & !DEBUG
-!  write (*,'("DEBUG:392: (FOUND!) irowf=",I3,"/",I6," for irowt=(",I4,"/",I5,")")') &
-!  irowf, size(frows),irowt,size(trows) !DEBUG
       if (irowf < 0) then  ! No matching with FRF is found
         !!! Comment: FRF may (or actually does) not match for the telemetry rows for the ASM-mode data
         !retrows(irowr)%is_valid = .false.
@@ -310,7 +268,6 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
         cycle
       end if
 
-!print *,'DEBUG:398: matching found: irowr=',irowr,' irowt=',irowt,' irowf=',irowf
       retrows(irowr)%with_frf = .true.
       retrows(irowr)%irowf = irowf
       retrows(irowr)%frf = frows(irowf)
@@ -327,10 +284,11 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
   end function get_asm_sfrow
 
 
+  !------------------------------------------------------------
   ! Update asm_sfrow, checking various modes.
   !
   ! invalid flag in the sfrow may be set.
-  !
+  !------------------------------------------------------------
   subroutine update_asm_sfrow_modes(trows, sfrows, skip_validate)
     type(asm_telem_row), dimension(:), intent(in) :: trows
     type(asm_sfrow), dimension(:), allocatable, intent(inout) :: sfrows
@@ -351,8 +309,9 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     end do
   end subroutine update_asm_sfrow_modes
 
+  !------------------------------------------------------------
   ! Update asm_sfrow, checking various modes.
-  !
+  !------------------------------------------------------------
   subroutine update_asm_sfrow_mode_one(trows, sfrow)
     type(asm_telem_row), dimension(:), intent(in) :: trows
     type(asm_sfrow), intent(inout) :: sfrow
@@ -405,17 +364,17 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     sfrow%bitrate    = get_val_frb(TELEM_LOC%BITRATE,   trows, sfrow) ! (int) Telemetry bit rate (F16W66)
   end subroutine update_asm_sfrow_mode_one
 
+  !------------------------------------------------------------
   ! Validate asm_sfrow, checking ASM mode etc.
   !
   ! sfrow%invalid flag in the sfrow may be set.
-  !
+  !------------------------------------------------------------
   subroutine validate_asm_sfrow_mode_one(trows, sfrow)
     type(asm_telem_row), dimension(:), intent(in) :: trows
     type(asm_sfrow), intent(inout) :: sfrow
 
     if (.not. sfrow%is_valid) return  ! Likely (already) 'no matching with FRF found'
 
-!print *, 'DEBUG:142: start does_validate'
     ! lostf  ! (should be already flagged... just in case)
     if ((sfrow%with_frf) .and. (sfrow%frf%lostf > 0)) then
       sfrow%is_valid = .false.
@@ -424,7 +383,6 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     end if
 
     ! MODE_ASM & STAT_ASM
-!print *, 'DEBUG:149: mode_asm=', sfrow%mode_asm, ' sfrow%stat_asm=', sfrow%stat_asm, ' istat=', istat_asm 
     if (sfrow%stat_asm_b < 0) then  ! STAT_ASM is neither 'ON' nor 'OFF'
       write(stderr,'("FATAL: strange. Contact the code developer.")')
       write(stderr,'(A,I4,A)') 'FATAL: Negative (uninitialized?) sfrow%stat_asm_b=', sfrow%stat_asm_b, '"'
@@ -444,16 +402,9 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
       sfrow%is_valid = .false.
       sfrow%reason_invalid = get_reason_invalid('asmmodeoff') ! defined in asm_fits_common
     end if
-
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    !if (sfrow%stat_asm_b .ne. sfrow%mode_asm) then
-    !  sfrow%is_valid = .false.
-    !  sfrow%reason_invalid = get_reason_invalid('asmoff') ! defined in asm_fits_common
-    !  write(stderr,'(A,I4,A,I4,A,I4,A)') 'WARNING: (SF=', sfrow%sfn, ') MODE_ASM (=', sfrow%mode_asm &
-    !     , ') (F4 DP B3) differs from STAT_ASM (=', sfrow%stat_asm_b, '="'//get_onoff_enadis(sfrow%stat_asm_b, 'asm')//'")'
-    !end if
   end subroutine validate_asm_sfrow_mode_one
 
+  !------------------------------------------------------------
   ! Get the first value (n=0 in FXn+Y) of the specified Frame, Word, and maybe Byte
   !
   ! sfrow%invalid flag in the sfrow may be set.
@@ -462,6 +413,7 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
   !   For "F8n+1, W23", returns the value (0..255) of F1W23.
   !   For "F8n+4, W0, B0", returns 1 or 0 of F4W0B0.
   !
+  !------------------------------------------------------------
   integer function get_val_frb(loc_fwb, trows, sfrow) result(kval)  ! fwb: frame, word, bit
     type(t_loc_fwb), intent(in) :: loc_fwb
     type(asm_telem_row), dimension(:), intent(in) :: trows
@@ -511,12 +463,13 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     end if
 
     if (loc_fwb%bit < 0) return
-!print *,'DEBUG:259: sfn=',sfrow%sfn,' kval=',kval,' irow=',irow
     ! Evaluate the Bit
     kval = btest2int_int4_as_1byte(kval, loc_fwb%bit) ! defined in fort_util
   end function get_val_frb
 
+  !------------------------------------------------------------
   ! Returns merged FITS header from Telemetry and FRF
+  !------------------------------------------------------------
   function get_merged_head(tfhead, frfhead) result(rethead)
     type(fits_header), intent(in) :: tfhead, frfhead
     type(fits_header) :: rethead
@@ -528,7 +481,9 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     rethead%TARGET2%val = trim(frfhead%TARGET2%val)
   end function get_merged_head
 
+  !------------------------------------------------------------
   ! Returns merged FITS header from Telemetry and FRF
+  !------------------------------------------------------------
   function get_asm_fits_header(tfhead, frfhead, trows, relrows, status, creator) result(rethead)
     type(fits_header), intent(in) :: tfhead, frfhead
     type(asm_telem_row), dimension(:), intent(in) :: trows
@@ -593,9 +548,7 @@ print *,'DEBUG:445: irow=',irow,' irowt=',irowt,' ret-F2'
     !..................................................
     tfs(:) = .false.
     tfs(1:loc_asm_s) = .true.
-if (IS_DEBUG()) print *,'DEBUG:832:loc_asm_s=',loc_asm_s
     ilocs = findloc(relrows%with_frf, .true., MASK=tfs, BACK=.true.)
-if (IS_DEBUG()) print *,'DEBUG:833:ilocs=',ilocs
     irow = ilocs(1) ! Last valid relrow(i) before the first ASM-mode
     if (irow > 0) then
       rethead%FRFSFN_S%val = relrows(irow)%frf%sfn
@@ -624,9 +577,7 @@ if (IS_DEBUG()) print *,'DEBUG:833:ilocs=',ilocs
 
     tfs(:) = .false.
     tfs(loc_asm_e:size(tfs)) = .true.
-if (IS_DEBUG()) print *,'DEBUG:862:loc_asm_e=',loc_asm_e,' stfs=',size(tfs)
     ilocs = findloc(relrows%with_frf, .true., MASK=tfs)
-if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
     irow = ilocs(1) ! First valid relrow(i) after the last ASM-mode
     if (irow > 0) then
       rethead%FRFSFN_E%val = relrows(irow)%frf%sfn
@@ -674,7 +625,9 @@ if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
   end function get_asm_fits_header
 
 
+  !------------------------------------------------------------
   ! Output FITS header in a HDU of the ASM data FITS file
+  !------------------------------------------------------------
   subroutine write_asm_fits_header(unit, fhd, status, comname, args, primary)
     implicit none
     character(len=*), parameter :: Subname = 'write_asm_fits_header'
@@ -693,11 +646,6 @@ if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
       is_primary = primary
     end if
 
-    !call FTPKYS(unit, 'TITLE',    fhd%title%val,    fhd%title%comment,    status)
-    !call FTPKYS(unit, 'TELESCOP', fhd%telescop%val, fhd%telescop%comment, status)
-    !call FTPKYS(unit, 'INSTRUME', fhd%instrume%val, fhd%instrume%comment, status)
-    !call FTPKYS(unit, 'SACD',    fhd%sacd%val,    fhd%sacd%comment,    status)
-    !call ftpkys(unit, 'FILENAME', fhd%filename%val, fhd%filename%comment, status) ! asm_comm defined in asm_fits_common
     call FTPKYS(unit, fhd%TELESCOP%name, fhd%TELESCOP%val, fhd%TELESCOP%comment, status)
     call warn_ftpcl_status(status, 'ftpkys', trim(Subname)//':TELESCOP')
     call FTPKYJ(unit, fhd%SACD%name, fhd%SACD%val, fhd%SACD%comment, status)
@@ -789,36 +737,11 @@ if (IS_DEBUG()) print *,'DEBUG:863:ilocs=',ilocs
       end do
       call FTPHIS(unit, strarg, status)
     end if
-
-    !call FTPKYS(unit, 'TITLE',    fitshead%title,    asm_comm%title,    status)
-    !!call FTPKY[JKLS](funit, 'date', '????', '[day] Creation date of this file', status)
-    !!call FTPKY[EDFG](unit,keyword,keyval,decimals,comment, > status)  ! decimals < 0 => G format, -4 means 4 digits below 0
-    ! .........
   end subroutine write_asm_fits_header
 
-
-  ! Test output for debugging.
-  subroutine write_tmp_fits(fname, status)
-    implicit none
-    integer, parameter :: MY_FUNIT = 60  ! arbitrary
-    character(len=*), intent(in) :: fname
-    integer, intent(out) :: status
-    integer :: unit, bitpix, naxis = 0
-    integer :: blocksize, naxes(0)
-    integer :: group,fpixel,nelements,array(300,200) ! i,j,
-    logical :: simple =.true., extend = .true.
-    integer :: nhdu
-    character(len=30) :: errtext
-    call ftgiou(unit, status)
-if (IS_DEBUG()) print *,'DEBUG:041:giou, unit=', unit, ' status=',status
-if ((status .ne. 0) .and. ((unit > 999) .or. (unit < 9))) unit = MY_FUNIT
-call ftinit(unit, '/tmp/out.fits', blocksize, status)
-if (IS_DEBUG()) print *,'DEBUG:042:b3ftart-out, status=',status
-    call ftclos(unit, status)
-    call ftfiou(unit, status)
-  end subroutine write_tmp_fits
-
+  !------------------------------------------------------------
   ! Warn if failing in writing a column
+  !------------------------------------------------------------
   subroutine warn_ftpcl_status(status, funcname, kwd)
     integer, intent(in) :: status
     character(len=*), intent(in) :: funcname, kwd
@@ -831,7 +754,9 @@ if (IS_DEBUG()) print *,'DEBUG:042:b3ftart-out, status=',status
     end if
   end subroutine warn_ftpcl_status
 
+  !------------------------------------------------------------
   ! Output FITS file of the ASM data
+  !------------------------------------------------------------
   subroutine write_cols(unit, trows, relrows, colheads, status)
     implicit none
     character(len=*), parameter :: Subname = 'write_cols'
@@ -862,17 +787,6 @@ if (IS_DEBUG()) print *,'DEBUG:042:b3ftart-out, status=',status
     allocate(cold(naxis2))
     allocate(cols8(naxis2))
 
-if (IS_DEBUG()) then ! in asm_fits_common
-print *,'DEBUG:2433'
-call dump_type(relrows(3), 3)
-
-print *,'DEBUG:2439-6:'
-call dump_type(colheads(6))
-print *,'DEBUG:2439-7:'
-call dump_type(colheads(7))
-print *,'DEBUG:2439-8:'
-call dump_type(colheads(8))
-end if
     !FTPCL[SLBIJKEDCM](unit,colnum,frow,felem,nelements,values, > status) ! frow: 1st row?, felem: 1st element?
     status = 0 
     iframe = 0 
@@ -880,16 +794,9 @@ end if
     iasm = 0    ! The i-th number of the main ASM data (should be repeated NWORDS_MAIN=96 times)
     ! do ikind=1, size(COL_FORM_UNITS)
     do ikind=1, size(colheads)
-!do ikind=2, 4  ! Index in COL_FORM_UNITS
       iout = 0  ! Row number of each output Column
       iend = 0
-!ckey = COL_FORM_UNITS(ikind)%key
       ckey = colheads(ikind)%key 
-if (IS_DEBUG()) then ! in asm_fits_common
-if (trim(ckey) .ne. 'main') then
-print *,'DEBUG:2010:ikind=',ikind, ' ckey=', trim(ckey)
-end if
-end if
       select case(trim(ckey))
       case('main')  ! Main ASM data (96 cells)
         iasm = iasm + 1
@@ -915,9 +822,6 @@ end if
         end do
         ittype = ittype + 1
         call FTPCLI(unit, ittype, 1, 1, naxis2, coli, status)  ! colnum = 1
-if (status .ne. 0) then !DEBUG
-  print *,'DEBUG:2042: iasm=',iasm,' ittype=',ittype
-end if
         call warn_ftpcl_status(status, 'FTPCLI', ckey)
         call modify_ttype_comment(unit, ittype, ckey, status)
 
@@ -935,12 +839,9 @@ end if
           end do
         end do
         ittype = ittype + 1  ! FITS Table column number
-if (IS_DEBUG()) print *,'DEBUG:2310:ikind=',ikind, ' ittype=', ittype,' nelements=naxis2=',naxis2,' size(cold)=',size(cold)
         call FTPCLD(unit, ittype, 1, 1, naxis2, cold, status)  ! colnum = 1
         call warn_ftpcl_status(status, 'FTPCLD', ckey)
         call modify_ttype_comment(unit, ittype, ckey, status)
-
-if (IS_DEBUG()) print *,'DEBUG:234:fds=',cold(5:8)
 
       case('Euler')
         ! All frames in the same SF have a common value.
@@ -959,33 +860,16 @@ if (IS_DEBUG()) print *,'DEBUG:234:fds=',cold(5:8)
                  iend, naxis2, irelrow, nrelrows
               call EXIT(1)
             end if
-            ! cold(iout:iend) = frfrows(relrows(irelrow)%irowf)%eulers(iprm,1)  ! Same value for the entire SF
             rval = relrows(irelrow)%frf%eulers(iprm,1)
             if (rval .ge. -360) then
               rval = rad2deg(rval)  ! Convert radian to degree
             end if
             cold(iout:iend) = rval  ! Same value for the entire SF
-if (IS_DEBUG()) then ! in asm_fits_common
-if ((irelrow > 2) .and. (irelrow < 5)) then
- !print *,'DEBUG:429:iprm=',iprm,' irelrow=',irelrow,' irowf=',relrows(irelrow)%irowf,' iout=', iout, ' eulers=', &
-    !frfrows(relrows(irelrow)%irowf)%eulers(:,1), ' This=',frfrows(relrows(irelrow)%irowf)%eulers(iprm,1),  &
-  print *,'DEBUG:429:iprm=',iprm,' irelrow=',irelrow,' irowf=',relrows(irelrow)%irowf,' iout=', iout, ' eulers=', &
-     relrows(irelrow)%frf%eulers(:,1), ' This=',relrows(irelrow)%frf%eulers(iprm,1),  &
-     ' cold=',cold(iout)
-end if
-end if
           end do
           ittype = ittype + 1  ! FITS Table column number
-if (IS_DEBUG()) print *,'DEBUG:2410:ikind=',ikind, ' ittype=', ittype , ' iprm=',trim(ladjusted_int(iprm)), &
-  ' naxis2=',trim(ladjusted_int(naxis2))
           call FTPCLD(unit, ittype, 1, 1, naxis2, cold, status)  ! colnum = 1
-! print *,'DEBUG:430:ittype=',ittype,' iout=',iout,' naxis2=',naxis2,' cold(3)=',cold(66)
           call warn_ftpcl_status(status, 'FTPCLD', ckey)
           call modify_ttype_comment(unit, ittype, ckey, status)
-
-!print *,'DEBUG:334:euler',iprm,'=',cold(63:65)
-        !end do
-!print *,'DEBUG:332:irowf(2)=',relrows(2)%irowf
 
       case('SFNum', 'SFNTelem')
         ! Integer*4 columns based on the SF
@@ -993,7 +877,6 @@ if (IS_DEBUG()) print *,'DEBUG:2410:ikind=',ikind, ' ittype=', ittype , ' iprm='
           colj(:) = 0
           iout = 0
           iend = 0
-if (IS_DEBUG()) print *,'DEBUG:2510:nrelrows=',nrelrows, ' ittype=', ittype 
           do irelrow=1, nrelrows  ! Each relrow (=asm_sfrow) number
             if (.not. relrows(irelrow)%is_valid) cycle
             iout = iend + 1
@@ -1005,16 +888,7 @@ if (IS_DEBUG()) print *,'DEBUG:2510:nrelrows=',nrelrows, ' ittype=', ittype
             end if
             select case(trim(ckey))
             case('SFNum')
-              !colj(iout:iend) = frfrows(relrows(irelrow)%irowf)%eulers(iprm, 1)
               colj(iout:iend) = relrows(irelrow)%frf%sfn
-if (IS_DEBUG()) then ! in asm_fits_common
-if (irelrow == 3) then
-print *,'DEBUG:2533:in the loop, iout=',iout,' iend=',iend
-call dump_type(relrows(3), 3)
-print *,'DEBUG:2534:in the loop'
-call dump_type(relrows(3)%frf)
-end if
-end if
             case('SFNTelem')
               colj(iout:iend) = relrows(irelrow)%SFNTelem
             case default
@@ -1022,22 +896,17 @@ end if
             end select
           end do
           ittype = ittype + 1  ! FITS Table column number
-if (IS_DEBUG()) print *,'DEBUG:2540:FTPCLJ:nrelrows=',nrelrows, ' ittype=', ittype 
           call FTPCLJ(unit, ittype, 1, 1, naxis2, colj, status)  ! colnum = 1
           call warn_ftpcl_status(status, 'FTPCLJ', ckey)
           call modify_ttype_comment(unit, ittype, ckey, status)
           ! call FTSNUL(unit,colnum,snull > status) ! Define string representation for NULL column
           ! call FTTNUL(unit,colnum,tnull > status) ! Define the integer(!) value to be treated as NULL
-
-if (IS_DEBUG()) print *,'DEBUG:364:sfn',iprm,'=',colj(63:65)
         end do
-if (IS_DEBUG()) call dump_type(relrows(5))
 
       case('SF2bits', 'Mode_ASM', 'Mode_PHA', 'ModeSlew', 'ModeSleM', 'ModeSleP', 'bitrate')  ! 'Fr6bits', 'i_frame', are Frame-based 
         ! Integer*2 columns
         do iprm=1, 1
           coli(:) = 0
-!coli(:) = -2
           iout = 0
           iend = 0
           do irelrow=1, nrelrows  ! Each relrow (=asm_sfrow) number
@@ -1101,7 +970,6 @@ if (IS_DEBUG()) call dump_type(relrows(5))
           end do
         end do
         ittype = ittype + 1  ! FITS Table column number
-!print *,'DEBUG:2340:ikind=',ikind, ' ittype=', ittype,' nelements=naxis2=',naxis2,' size(coli)=',size(coli)
         call FTPCLI(unit, ittype, 1, 1, naxis2, coli, status)  ! colnum = 1
         call warn_ftpcl_status(status, 'FTPCLI', ckey)
         call modify_ttype_comment(unit, ittype, ckey, status)
@@ -1128,7 +996,6 @@ if (IS_DEBUG()) call dump_type(relrows(5))
           end do
         end do
         ittype = ittype + 1  ! FITS Table column number
-!print *,'DEBUG:2340:ikind=',ikind, ' ittype=', ittype,' nelements=naxis2=',naxis2,' size(cols8)=',size(cols8)
         call FTPCLS(unit, ittype, 1, 1, naxis2, cols8, status)
         call warn_ftpcl_status(status, 'FTPCLS', ckey)
         call modify_ttype_comment(unit, ittype, ckey, status)
@@ -1189,13 +1056,16 @@ if (IS_DEBUG()) call dump_type(relrows(5))
         call err_exit_with_msg('('//Subname//') Parameter '//trim(ckey)//' is not yet taken into account.')
       end select
     end do
+
     if (allocated(coli)) deallocate(coli)
     if (allocated(colj)) deallocate(colj)
     if (allocated(cold)) deallocate(cold)
     if (allocated(cols8)) deallocate(cols8)
   end subroutine write_cols
 
+  !------------------------------------------------------------
   ! Output FITS file of the ASM data
+  !------------------------------------------------------------
   subroutine write_asm_evt_fits(outfil, fhead, trows, relrows, status, comname, args, outcolkeys)
     implicit none
     integer, parameter :: MY_FUNIT = 59  ! arbitrary
@@ -1205,7 +1075,6 @@ if (IS_DEBUG()) call dump_type(relrows(5))
     character(len=*), intent(in) :: outfil
     type(fits_header), intent(inout) :: fhead  ! Mainly for 1st-Extension header. EXISTDAT is written.
     type(asm_telem_row), dimension(:), intent(in) :: trows
-    !type(asm_frfrow), dimension(:), intent(in) :: frfrows
     type(asm_sfrow), dimension(:), intent(in) :: relrows
     integer, intent(out) :: status
     character(len=*), intent(in) :: comname
@@ -1228,35 +1097,12 @@ if (IS_DEBUG()) call dump_type(relrows(5))
 
     status=0
 
-if (IS_DEBUG()) then ! in asm_fits_common
-call dump_type(fhead)  ! for DEBUG
-end if
-
-!!!!!!!!!!!!!!!!!!!!!!!
-!! TODO
-!! colheads = get_colheads(['Tstart', 'Euler', SFNum])
-!! get_nframes_colheads(colheads)  ! interface of chars or t_asm_colhead
-!!!!!!!!!!!!!!!!!!!!!!!
-
     if (present(outcolkeys)) then
-if (IS_DEBUG()) call dump_chars(outcolkeys, 'DEBUG:143: outcolkeys=')
       colheads = get_colheads(outcolkeys)
-if (IS_DEBUG()) print *,'DEBUG:0095: size(colheads)=',size(colheads)
     else
       colheads = get_colheads()  ! Column Header info
                                  ! %(key, type, prm%(form, unit, comm, dim))
     end if
-if (IS_DEBUG()) then ! in asm_fits_common
-if (size(colheads) > 94) then
-call dump_type(colheads(95))  ! for DEBUG
-call dump_type(colheads(97))  ! for DEBUG
-call dump_type(colheads(98))  ! for DEBUG
-end if
-end if
-!do i=99,size(colheads)  ! for DEBUG
-!  print *,'i=',i        ! for DEBUG
-!  call dump_asm_colhead(colheads(i))  ! for DEBUG
-!end do                  ! for DEBUG
 
     ! Get an unused Logical Unit Number to use to create the FITS file
     call ftgiou(unit,status)
@@ -1266,7 +1112,6 @@ end if
     end if
 
     ! create the new empty FITS file blocksize=1
-    !call ftinit(unit,filename,blocksize,status)
     call ftinit(unit,'!'//outfil,blocksize,status)
     call warn_ftpcl_status(status, 'FTINIT', Subname)
     if (status .ne. 0) call err_exit_with_msg('Is the output directory writable?')
@@ -1274,64 +1119,40 @@ end if
 
     call FTGERR(status, errtext)  ! for Debugging
     call FTGHDN(unit, nhdu)  ! CHDU: Current HDU
-if (IS_DEBUG()) print *,'DEBUG:0010: test-open1-status=',status,' / HDU=',nhdu,' / ',trim(errtext)
 
     ! initialize parameters about the FITS image (300 x 200 16-bit integers)
     simple=.true.
     bitpix=16  ! signed 2-byte, 8: unsigned 1-byte, -32: real, -64: double
     extend=.true.
+
     ! write the required (Primary) header keywords
     call ftphpr(unit, simple, bitpix, 0, naxes, 0, 1, extend, status) ! Because naxis=0, naxes is ignored.
     ! write other optional keywords to the header
     call write_asm_fits_header(unit, fhead, status, primary=.true.)
-!call ftpkyj(unit,'EXPOSURE',1500,'Total Exposure Time',status)  ! DEBUG
     
-    ! Extension
+    ! ------------ Write Extension ------------
     
-!ttypes = colheads(97:101)%type
-!tforms = colheads(97:101)%prm%form
-!tunits = colheads(97:101)%prm%unit
     ttypes = colheads%type
     tforms = colheads%prm%form
     tunits = colheads%prm%unit
-    !call FTIBIN(unit,nrows,tfields,ttype,tform,tunit,Extname,varidat > status) ! nrows should be 0 ! FiTs-Insert-BINary-table
-    !call FTIBIN(unit,0,2,ttypes,tforms,tunits,'TestBinExt',.true., status) ! Creates an extension with basic header and moves to it.
-    !call FTIBIN(unit, 0, size(ttypes) &
-if (IS_DEBUG()) print *,'DEBUG:0030: size(tforms)=TFIELDS=',size(tforms)
+
+    ! FTIBIN(unit,nrows,tfields,ttypes,tforms,tunits,Extname,varidat > status) ! nrows should be 0 ! FiTs-Insert-BINary-table
+    !! Creates an extension with basic header and moves to it.
     call FTIBIN(unit, 0, size(tforms) &
               , ttypes, tforms, tunits, Extname, .true., status) ! Creates an extension with basic header and moves to it.
     call warn_ftpcl_status(status, 'FTIBIN', Subname)
-if (IS_DEBUG()) then ! in asm_fits_common
-if (size(tforms) > 96) then
-print *,'DEBUG:0032:tforms(97)=',trim(tforms(97))
-end if
-end if
 
-call FTGHDN(unit, nhdu)
-call FTGERR(status, errtext)
-if (IS_DEBUG()) print *,'test-new-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
+    !call FTGHDN(unit, nhdu)  ! current HDU (for DEBUG)
+    !call FTGERR(status, errtext)
+    !if (IS_DEBUG()) print *,'test-new-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
 
     call write_asm_fits_header(unit, fhead, status, comname, args, primary=.false.)
-    !fhead%EXISTDAT%val = any(relrows%is_valid)
 
     call write_cols(unit, trows, relrows, colheads, status)  !!!!!!!!!!!!!!!
-
-    !!----- Trying to eliminate the error in fverify (File has extra byte(s) after last HDU at byte 40320) by creating a new extension and deleting it ----------
-!    call FTCRHD(unit, status)
-!    call FTGERR(status, errtext)
-!if (IS_DEBUG()) print *,'DEBUG:898b: FTCRHD-status=',status,' / ',trim(errtext)
-!    call FTDHDU(unit, hdutype,status)
-!    call FTGERR(status, errtext)
-!if (IS_DEBUG()) print *,'DEBUG:898c: FTDHDU-status=',status,' / ',trim(errtext)
-!    call FTMAHD(unit, 1, hdutype, status)           ! Move to the Absolute extention (1 means primary header)
-!    call FTGERR(status, errtext)
-!if (IS_DEBUG()) print *,'DEBUG:898d: FTMAHD-status=',status,' / ',trim(errtext)
 
     ! close the file and free the unit number
     call ftclos(unit, status)
     call err_exit_if_status(status, 'in FTCLOS()')
-    call FTGERR(status, errtext)
-if (IS_DEBUG()) print *,'DEBUG:899: FTCLOS()-status=',status,' / ',trim(errtext)
     call ftfiou(unit, status)
 
     if (allocated(ttypes)) deallocate(ttypes)
@@ -1339,13 +1160,14 @@ if (IS_DEBUG()) print *,'DEBUG:899: FTCLOS()-status=',status,' / ',trim(errtext)
     if (allocated(tunits)) deallocate(tunits)
     if (allocated(colheads)) deallocate(colheads)
 
-    ! Very bad "emergency" work-around practice for the empty-table FITS...
+    ! A terrible "emergency" work-around practice for an empty-table FITS...
     if (.not. any(relrows%is_valid)) then
       call force_delete_trailing_bytes_fits(outfil)
     end if
   end subroutine write_asm_evt_fits
 
 
+  !------------------------------------------------------------
   ! Delete FORCIBLY the last bytes in the FITS file with direct access.
   !
   ! *** CAUTION ***
@@ -1361,6 +1183,7 @@ if (IS_DEBUG()) print *,'DEBUG:899: FTCLOS()-status=',status,' / ',trim(errtext)
   ! keyword or table column is deleted or a new one is added in the output FITS
   ! by this package.
   !
+  !------------------------------------------------------------
   subroutine force_delete_trailing_bytes_fits(outfil)
     implicit none
     integer, parameter :: MY_FUNIT = 123  ! arbitrary
@@ -1383,382 +1206,27 @@ if (IS_DEBUG()) print *,'DEBUG:899: FTCLOS()-status=',status,' / ',trim(errtext)
   end subroutine force_delete_trailing_bytes_fits
 
 
-  ! Read multiple channels from FITS and returns a (Integer*2) 2-dim Array (value, detector) for the summed data
-  function get_asm_summed_chan_orig(funit, chan_l_h, nrows) result(retchans)
+  !------------------------------------------------------------
+  ! Test output for debugging.
+  !------------------------------------------------------------
+  subroutine write_tmp_fits(fname, status)
     implicit none
-    character(len=*), parameter :: Subname = 'get_asm_summed_chan'
-    integer, intent(in) :: funit, nrows
-    integer, dimension(2), intent(in) :: chan_l_h ! Low and high channels to sum
-    integer(kind=ip2), dimension(nrows, NUM_INSTR) :: retchans  ! NUM_INSTR defined in asm_fits_common
-
-    integer(kind=ip2), dimension(nrows) :: tmpchs
-    integer(kind=ip2) :: nullval
-    logical :: anyf
-    integer :: status, colnum, ich, idet
-    integer(kind=ip2) :: statusi2
+    integer, parameter :: MY_FUNIT = 60  ! arbitrary
+    character(len=*), intent(in) :: fname
+    integer, intent(out) :: status
+    integer :: unit, bitpix, naxis = 0
+    integer :: blocksize, naxes(0)
+    integer :: group,fpixel,nelements,array(300,200) ! i,j,
+    logical :: simple =.true., extend = .true.
+    integer :: nhdu
     character(len=30) :: errtext
-
-    nullval = -999
-if (IS_DEBUG()) print *,'DEBUG:259: nrows=',nrows,' chan_l_h=',chan_l_h
-    do idet=1, NUM_INSTR
-      retchans(:, idet) = 0_ip2 
-      do ich=chan_l_h(1), chan_l_h(2)
-        colnum = (idet-1)*NCHANS_PHA + ich + 1   ! NCHANS_PHA defined in asm_fits_common
-if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:261: colnum=',colnum,' nrows=',nrows
-        tmpchs = 0_ip2
-        ! FiTs_GeT_Column_Value: FTGCV[SBIJKEDCM](unit,colnum,frow,felem,nelements,nullval, >values,anyf,status)
-        !  anyf is True if any of the values is undefined.
-        call FTGCVI(funit, colnum, 1, 1, nrows, 0, tmpchs, anyf, status) ! No check for undefined.
-        !call FTGCVI(funit, colnum, 1, 1, nrows, UNDEF_INT2, tmpchs, anyf, status)
-!if (.true.) then
-        if (status .ne. 0) then
-          call FTGERR(status, errtext)
-          write(stderr,'("ERROR: (",A,") Failed in FTGCVI() with Status=",A," (",A,"): colnum=",A)') &
-             Subname, trim(ladjusted_int(status)), trim(errtext), trim(ladjusted_int(colnum))
-
-          !! ------------ Comment ------------
-          !! Rerun FTGCVI() with INTEGER*2 status, and it may work if GINGA_DEBUG=1
-          !! There is no reason this works, when the others do not, but it seems to do so!
-          call FTGCVI(funit, colnum, 1, 1, nrows, 0, tmpchs, anyf, statusi2)
-          if (statusi2 .ne. 0) then
-            call FTGERR(int(statusi2), errtext)
-            write(stderr,'("ERROR: (",A,") Failed(2) in FTGCVI() with Status=",A," (",A,"): colnum=",A)') &
-               Subname, trim(ladjusted_int(int(statusi2))), trim(errtext), trim(ladjusted_int(colnum))
-          end if
-        else
-          if (IS_DEBUG()) write(stderr,'("NOTE: Success in FTGCVI()")')
-          if (anyf) write(stderr,'("ERROR: (",A,") anyf is TRUE: colnum=",A)') &
-             Subname, trim(ladjusted_int(colnum))
-        end if
-
-        retchans(:, idet) = retchans(:, idet) + tmpchs
-      end do
-if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:268: sum=',sum(retchans(:, idet)),' for idet=',trim(ladjusted_int(idet))
-if (IS_DEBUG() .and. (idet == 5)) print *,'DEBUG:269:  87(det=5)=',retchans( 87, idet)
-if (IS_DEBUG() .and. (idet == 2)) print *,'DEBUG:269: 110(det=2)=',retchans(110, idet)
-    end do
-if (IS_DEBUG())                   print *,'DEBUG:270:  87=',retchans(87, :)
-if (IS_DEBUG())                   print *,'DEBUG:270: 110=',retchans(110, :)
-  end function get_asm_summed_chan_orig
-
-  ! Read ASM fits and returns required Arrays to output.
-  subroutine asm_time_row_det_band_orig(fname, chans, artime, outchans)
-    implicit none
-    character(len=*), parameter :: Subname = 'asm_time_row_det_band'
-    integer, parameter :: MY_FUNIT = 61  ! arbitrary
-    character(len=*), intent(in) :: fname  ! fname for ASM.fits
-    integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band)
-    real(kind=dp8), dimension(:), allocatable, intent(out) :: artime
-    integer(kind=ip2), dimension(:,:,:), allocatable, intent(out) :: outchans ! (Row(channel-values), Detector, Band(Low(1)/High(2)))
-    integer :: funit, blocksize, hdutype, status=-999, colnum
-    integer :: nrows, iband
-    logical :: existdat, anyf
-    character(len=1024) :: comment
-    character(len=30) :: errtext
-    character(len=MAX_FITS_CHAR) :: coltemplate
-    type(t_form_unit) :: tmpfu
-    logical :: success_ftgiou
-
-write(stderr,'("")', advance='no')
-    success_ftgiou = .true.
-    call FTGIOU(funit, status)
-if (IS_DEBUG()) write(stderr,'("(",A,") UNIT= ",A)') Subname, trim(ladjusted_int(funit))
-    if (status .ne. 0) then
-      call FTGERR(status, errtext)
-      write(stderr,'("WARNING: (",A,") Failed in ftgiou(): status= ",A," (",A,")")', advance='no') &
-         Subname, trim(ladjusted_int(status)), trim(errtext)
-      if ((funit > 999) .or. (funit < 9)) then
-        write(stderr,'(": unit = ",I12,". Manually reset to ",I3)') funit, MY_FUNIT
-        funit = MY_FUNIT
-        success_ftgiou = .false.
-      else
-        write(stderr,'(": unit = ",I12,", which is used nonetheless.")') funit
-        !write(stderr,'(": unit = ",I12,", which is reset to ",I3)') funit, MY_FUNIT
-        !funit = MY_FUNIT
-        !success_ftgiou = .false.
-      end if
-    end if
-!funit = MY_FUNIT  ! DEBUG
-    call FTOPEN(funit, trim(fname), 0, blocksize, status)  ! 0: readonly
-    !call FTOPEN(funit, trim(fname), 0, blocksize, status)  ! 0: readonly
-    !call ftopen(funit, fname, 0, blocksize, status)  ! 0: readonly
-    call err_exit_if_status(status, 'Failed to open the FITS to read: '//trim(fname))
-
-    ! Move to the 1st extention
-    call FTMAHD(funit, 2, hdutype, status)
-    call err_exit_if_status(status, 'Failed to move to the 1st extension: '//trim(fname))
-
-    call FTGKYL(funit, 'EXISTDAT', existdat, comment, status)
-    if (.not. existdat) then
-      write(stderr, '(A)') 'Input FITS ('//trim(fname)//') contains no data. No files are created.'
-      call EXIT(0)
-    end if
-
-    ! FiTs_Get_Number_of_RoWs
-    call FTGNRW(funit, nrows, status) ! cf. FTGNRWLL() for INT*64
-    if ((status .ne. 0) .or. (nrows .le. 0)) then
-      call err_exit_with_msg('Number of rows are strange: '//trim(ladjusted_int(nrows))//' / status='//trim(ladjusted_int(status)))
-      stop  ! redundant
-    end if
-
-    allocate(outchans(nrows, NUM_INSTR, size(chans, 2))) ! (Row, Detector, Band)
-    allocate(artime(nrows)) ! for Tstart
-if (IS_DEBUG()) print *,'DEBUG:245: out-sizes=',size(outchans, 1),' s2=',size(outchans, 2),' s3=',size(outchans, 3)
-    outchans = -99
-    !artime = 0.0d0
-
-    !! FiTs_Get_Number_of_CoLumns
-    !call FTGNCL(funit, nc, status) ! read TFIELDS
-    !if ((status .ne. 0) .or. (nc .ne. 1)) then
-    !  write(errmsg, '("TFIELDS (number of columns) is not 1 but ", i1)') nc
-    !  call err_exit_with_msg(errmsg)
-    !  stop  ! redundant
-    !end if
-
-    !! FiTs_GeT_CoLumn (Get the datatype of a column): FTGTCL(unit,colnum, > datacode,repeat,width,status)
-    !call FTGTCL(funit, 1, datacode, repeat, width, status)
-    !if ((datacode .ne. 11) .or. (repeat .ne. nbytespercard)) then  ! namely, if TFORM1 != '144B'
-    !  errmsg = 'The format (TFORM1) is not 144B.'
-    !  call err_exit_with_msg(errmsg)
-    !  stop  ! redundant
-    !end if
-
-    ! Get summed channle data
-    do iband=1, size(chans, 2)
-      outchans(:,:,iband) = get_asm_summed_chan_orig(funit, chans(:, iband), nrows)
-if (IS_DEBUG()) print *,'DEBUG:369: iband=',iband,' sum=',sum(outchans(:,2,iband))
-    end do
-
-    ! Get Tstart (Time column)
-    tmpfu = get_element('Tstart', COL_FORM_UNITS)
-    coltemplate = trim(tmpfu%root)
-
-    ! Get column number for Tstart (should be 97)
-    ! FTGCNO(unit,casesen,coltemplate, > colnum,status) ! FiT_Get_Column_from_Name_to_nO
-    call FTGCNO(funit, .false., trim(coltemplate), colnum, status)
-
-    ! Get the Array of Tstart
-    ! FTGCV[SBIJKEDCM](unit,colnum,frow,felem,nelements,nullval, > values,anyf,status) ! FiT_Get_Column_Value
-    call FTGCVD(funit, colnum, 1, 1, nrows, UNDEF_DOUBLE, artime, anyf, status)
-
-    call FTCLOS(funit, status)
-    call err_exit_if_status(status, 'Failed to close the FITS: '//trim(fname))
-    if (success_ftgiou) call FTFIOU(funit, status)
-
-  end subroutine asm_time_row_det_band_orig
-
-
-  ! Write QDP/PCO
-  subroutine write_qdp_orig(fname, outroot, chans, artime, outchans, status)
-    implicit none
-    integer, parameter :: MY_FUNIT = 62  ! arbitrary
-    real(dp8), parameter :: ys1 = 0.75, ys2 = 0.9+1/60.d0, yd1 = -(0.1+1/30.d0)  ! QDP Y-starting positions 1 and 2 and difference
-    character(len=*), intent(in) :: fname, outroot  ! fname for ASM.fits
-    integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band) ! for displaying purpose only
-    real(dp8), dimension(:), intent(in) :: artime
-    integer(kind=ip2), dimension(:,:,:), intent(in) :: outchans ! (Row(channel-values), Detector(6), Band(Low(1)/High(2)))
-    integer, intent(out), optional :: status
-    character(len=2048) :: qdpfile, pcofile
-    integer :: iy, idet, irow, iband, statustmp
-    integer :: unit, colnum
-    character(len=5), dimension(size(chans, 2)) :: strchs
-
-    qdpfile = trim(outroot)//'.qdp'
-    pcofile = trim(outroot)//'.pco'
-
-if (IS_DEBUG()) print *,'DEBUG:142: out-beg sum=',sum(outchans(:,2,1))
-    do iband=1,size(chans,2)
-      if (chans(1, iband) == chans(2, iband)) then
-        write(strchs(iband), '(I0.2)') chans(1, iband)
-      else
-        write(strchs(iband), '(I0.2,"-",I0.2)') chans(1, iband), chans(2, iband)
-      end if
-    end do
-
-    call FTGIOU(unit, status) ! Just get a safe IO unit
-    if ((status .ne. 0) .and. ((unit > 999) .or. (unit < 9))) then
-      write(stderr,'("WARNING: Failed in ftgiou(): unit = ",I12,". Manually reset to ",I3)') unit, MY_FUNIT
-      unit = MY_FUNIT
-    end if
-!unit = MY_FUNIT  ! DEBUG
-
-if (IS_DEBUG()) print *,'DEBUG:145: size1=',size(outchans,1),'sizes=',size(outchans, 2),' s3=',size(outchans, 3)
-    ! QDP file
-    open(UNIT=unit, file=qdpfile, IOSTAT=status, STATUS='UNKNOWN')  ! clobber=yes (i.e., overwrite, maybe)
-    write(unit, '("@",A)') trim(pcofile)
-    write(unit, '("! Tstart ")', advance='no')
-    iy = 1
-    do idet=1, size(outchans, 2)
-      do iband=1, size(outchans, 3)
-        iy = iy + 1
-        write(unit, '(" Y"I1,"FW",I1,"_CH",A)', advance='no') mod(idet-1,2)+1, (idet-1)/2+1, strchs(iband)
-      end do
-    end do
-    write(unit, '(A)') ''
-
-if (IS_DEBUG()) print *,'DEBUG:157: out-after sum=',sum(outchans(:,2,1))
-    do irow=1, size(outchans, 1)
-      write(unit, '(E20.14)', advance='no') artime(irow)
-      do idet=1, size(outchans, 2)
-        do iband=1, size(outchans, 3)
-          write(unit, '(" ",I4)', advance='no') outchans(irow, idet, iband)
-        end do
-      end do
-      write(unit, '(A)') ''
-    end do
-    close(UNIT=unit, IOSTAT=statustmp)
-
-    ! PCO file
-    open(UNIT=unit, file=pcofile, IOSTAT=status, STATUS='UNKNOWN')  ! clobber=yes (i.e., overwrite, maybe)
-    write(unit, '("CSIZ  0.60")')
-    write(unit, '("LAB T ASM light curves (CH:",A,") of",A)') trim(join_chars(strchs, ', ')), trim(basename(fname))
-    write(unit, '("LAB F ",A)') trim(basename(fname))
-    !iy = 1
-    do idet=1, size(outchans, 2)
-    !  do iband=1, size(outchans, 3)
-    !    iy = iy + 1
-    !    write(unit, '("LAB G",I1," Y"I1,"FW",I1,"_CH",A)') iy, mod(idet-1,2)+1, (idet-1)/2+1, strchs(iband)
-    !  end do
-     !write(unit, '("LAB G",I1," Y"I1,"FW",I1)') idet+1, mod(idet-1,2)+1, (idet-1)/2+1
-    end do
-
-    ! If default (aka, 6 detectors for 2 bands):
-    if ((size(outchans, 2) == 6) .and. (size(outchans, 3) == 2)) then
-      do idet=1, size(outchans, 2)
-        write(unit, '("win ",I2)') idet+1
-        if (idet == 1) then
-          write(unit, '("LAB T ASM light curves (CH:",A,") of",A)') trim(join_chars(strchs, ', ')), trim(basename(fname))
-          write(unit, '("LAB F ",A)') trim(basename(fname))
-        end if
-        write(unit, '("yplot ",I2," ",I2)') idet*2, idet*2+1
-        write(unit, '("loc 0 ",F12.10," 1 ",F12.10)') ys1+(idet-1)*yd1, ys2+(idet-1)*yd1
-        write(unit, '("LAB Y Y"I1,"FW",I1)') mod(idet-1,2)+1, (idet-1)/2+1
-        if (idet .ne. size(outchans, 2)) write(unit, '("lab nx off")')
-      end do
-    end if
-    write(unit, '("LAB X Tstart")')
-    write(unit, '("R X")')
-    
-    close(UNIT=unit, IOSTAT=statustmp)
-    call FTFIOU(unit, statustmp)
-  end subroutine write_qdp_orig
-
-  ! Read ASM fits and write QDP/PCO (Parent subroutine)
-  subroutine read_asm_write_qdp_orig(fname, outroot, chans) !, status)
-    implicit none
-    character(len=*), intent(in) :: fname, outroot  ! fname for ASM.fits
-    integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band)
-    integer :: status
-    real(kind=dp8), dimension(:), allocatable :: artime
-    integer(kind=ip2), dimension(:,:,:), allocatable :: outchans
-
-if (IS_DEBUG()) print *,'DEBUG:112: starting(sub)... chans=',chans, ' outroot=', trim(outroot)
-    call asm_time_row_det_band_orig(fname, chans, artime, outchans)
-if (IS_DEBUG()) print *,'DEBUG:411: after.(sub) sum=',sum(outchans(:,2,1))
-if (IS_DEBUG()) print *,'DEBUG:413: after.(sub)... a=',artime(1:4)
-    call write_qdp_orig(fname, outroot, chans, artime, outchans, status)
-if (IS_DEBUG()) print *,'DEBUG:812: end.(sub)... chans=',chans, ' outroot=', trim(outroot)
-
-    if (allocated(artime)) deallocate(artime)
-    if (allocated(outchans)) deallocate(outchans)
-  end subroutine read_asm_write_qdp_orig
-
-!  ! Output FITS file of the ASM data
-!  subroutine write_asm_fits(fname, fitshead, trows, frfrows, relrows, status)
-!    implicit none
-!    character(len=*), parameter :: Extname = 'ASM table'
-!    character(len=*), parameter :: Subname = 'write_asm_fits'
-!
-!    character(len=*), intent(in) :: fname
-!    type(fits_header), intent(in) :: fitshead  ! Mainly for 1st-Extension header
-!    type(asm_telem_row), dimension(:), intent(in) :: trows
-!    !type(asm_table_col), dimension(:, :), intent(in) :: tables ! (Row)
-!    type(asm_frfrow), dimension(:), intent(in) :: frfrows
-!    type(asm_sfrow), dimension(:), intent(in) :: relrows
-!    integer, intent(out) :: status
-!
-!    integer :: unit, bitpix, naxis = 2
-!    integer :: blocksize, naxes(2)
-!    integer :: group,fpixel,nelements,array(300,200) ! i,j,
-!    logical :: simple =.true., extend = .true.
-!    integer :: nhdu
-!    character(len=80), dimension(2) :: ttypes = (/ 'TIME', 'Char' /), tunits, &
-!         tforms = (/ '1D ', '20A' /)  ! 20A20?
-!         !tforms = (/ '1D   ', '20A20' /)  ! 20A20?
-!         !tforms = (/ '1D   ', '1D   ' /)
-!    real(kind=dp8), dimension(2) :: dvalues = (/ 12345.6, 7.89 /), d2values = (/ 0.023, 0.0045 /)
-!    character(len=20), dimension(2) :: svalues = (/ 'saisho', 'tsugi1' /)
-!    character(len=80) :: comment, keyword, snull, msg
-!    character(len=30) :: errtext
-!    type(t_asm_colhead), dimension(:), allocatable :: colheads
-!
-!    bitpix=16  ! signed 2-byte, -32: real, -64: double
-!    naxis=2
-!
-!if (IS_DEBUG()) print *,'DEBUG:125:start-out'
-!
-!    ! Get an unused Logical Unit Number to use to create the FITS file
-!    call ftgiou(unit, status)
-!    if ((status .ne. 0) .and. ((unit > 999) .or. (unit < 9))) then
-!      write(stderr,'("WARNING: Failed in ftgiou(): unit = ",I12,". Manually reset to 159.")') unit
-!      unit = 159
-!    end if
-!
-!if (IS_DEBUG()) print *,'DEBUG:140:aft-giou;unit=',unit, ' file=',trim(fname)
-!
-!    ! create the new empty FITS file blocksize=1
-!call ftinit(unit, '!/tmp/out.fits', blocksize, status)
-!    !call ftinit(unit, '!'//trim(fname), blocksize, status)
-!if (IS_DEBUG()) print *,'DEBUG:142:b3ftart-out, status=',status
-!    call warn_ftpcl_status(status, 'FTINIT', Subname)
-!    if (status .ne. 0) call err_exit_with_msg('Is the output directory writable?')
-!    call FTGHDN(unit, nhdu)  ! CHDU: Current HDU
-!if (IS_DEBUG()) print *,'DEBUG:write-open1-status=',status,' / HDU=',nhdu,' / ',trim(errtext)
-!    call ftphpr(unit,simple,bitpix,0,naxes,0,1,extend,status)
-!    !call ftpkyj(unit,'EXPOSURE',1500,'Total Exposure Time',status)
-!
-!    call write_asm_fits_header(unit, fitshead, status, primary=.true.)
-!
-!    colheads = get_colheads()  ! Column Header info
-!                               ! %(key, type, prm%(form, unit, comm, dim))
-!
-!    !!! Extension
-!    
-!    !ttypes = (/ 'TIME', 'String' /)
-!    !tforms = (/ '1D', '20A' /)  ! Double
-!    !tunits = (/ 'sec', '' /)
-!    tunits(1) = 'sec'
-!    tunits(2) = ''
-!
-!    !call FTIBIN(unit,nrows,tfields,ttype,tform,tunit,Extname,varidat > status) ! nrows should be 0 ! FiTs-Insert-BINary-table
-!    call FTIBIN(unit, 0, size(ttypes) &
-!              , ttypes, tforms, tunits, Extname, .true., status) ! Creates an extension with basic header and moves to it.
-!    ! Status check...
-!    call FTGHDN(unit, nhdu)
-!    call FTGERR(status, errtext)
-!    if (status .ne. 0) then
-!      write(stderr,'("ERROR: Failed to create a table: status=",i4," / HDU=",i4,a)') status,nhdu,' / '//trim(errtext)
-!    end if
-!
-!    call write_asm_fits_header(unit, fitshead, status)
-!
-!    ! Write Table (double precision)
-!    !FTPCL[SLBIJKEDCM](unit,colnum,frow,felem,nelements,values, > status) ! frow: 1st row?, felem: 1st element?
-!    call FTPCLD(unit,1,1,1,2,dvalues, status)  ! colnum = 1
-!    call FTGHDN(unit, nhdu)
-!    call FTGERR(status, errtext)
-!if (IS_DEBUG()) print *,'DEBUG: dval-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)
-!    
-!    call ftpkys(unit,'TDIM2','(20,1)','for Character in Binary table',status)
-!    call FTPCLS(unit,2,1,1,2,svalues, status)  ! colnum = 2
-!    !call FTPCLD(unit,2,1,1,2,d2values, status)
-!    call FTGHDN(unit, nhdu)
-!    call FTGERR(status, errtext)
-!if (IS_DEBUG()) print *,'DEBUG: char-ext=',status,' / HDU=',nhdu,' / ',trim(errtext)  ! If wrong, 309  / not an ASCII (A) column
-!
-!    call ftclos(unit, status)
-!    call ftfiou(unit, status)
-!  end subroutine write_asm_fits
-
+    call ftgiou(unit, status)
+!if (IS_DEBUG()) print *,'DEBUG:041:giou, unit=', unit, ' status=',status
+if ((status .ne. 0) .and. ((unit > 999) .or. (unit < 9))) unit = MY_FUNIT
+call ftinit(unit, '/tmp/out.fits', blocksize, status)
+!if (IS_DEBUG()) print *,'DEBUG:042:b3ftart-out, status=',status
+    call ftclos(unit, status)
+    call ftfiou(unit, status)
+  end subroutine write_tmp_fits
 end module asm_fitsout
 

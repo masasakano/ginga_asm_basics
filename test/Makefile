@@ -14,7 +14,6 @@ GINGA_TOOLS_DIR = /home/parallels/install/ginga_tools/v1.1/src/ # specify
 SRCDIR = ../src
 
 LNXLIB = -I${HEADAS}/include -I${HEADAS}/include/ape -L${XORGDIR} -L${HEADIR} -lftools_${VER_FTOOLS} -lcfitsio -lxanlib_${VER_FTOOLS} -lcpgplot5.2.2 -lpgplot5.2.2 -lape_2.9 -L${LIB64} -lreadline -lX11 -lgcc -ltermcap -ldl -lm -lc -Dunix -DPG_PPU -g -Wall -fno-automatic -fPIC -fno-common -lpng # -Wno-comment -Wno-long-long
-#LNXLIB = -I${HEADAS}/include -I${HEADAS}/include/ape -L${XORGDIR} -L${HEADIR} -lftools_6.25 -lcfitsio -lxanlib_6.25 -lcpgplot5.2.2 -lpgplot5.2.2 -lape_2.9 -L${LIB64} -lreadline -lX11 -lgcc -ltermcap -ldl -lm -lc -Dunix -DPG_PPU -g -Wall -fno-automatic -fPIC -fno-common -Wno-comment -Wno-long-long -lpng
 #LNXOPT = LD="gfortran -g" CC="gcc -g" FC="gfortran -g -c -fno-second-underscore -ff2c" LINKLIB="${LNXLIB}" ALL="${ALL}"
 LNXOPT = LD="gfortran -g" CC="${GCC} -g" FC="gfortran -g -c -fno-second-underscore -ff2c" LINKLIB="${LNXLIB}" ALL="${ALL}"
 
@@ -25,10 +24,7 @@ MACOPT = LD="gfortran -g" CC="${GCC} -g" FC="gfortran -g -c -fno-second-undersco
 
 #INSTALL_DIR = ../bin
 
-#ALL = asmtest f90test1
 ALL = unittest.o asmtest f90test1
-
-#ALLS = make_sf_list.pl
 
 start:
 	$(MAKE) `uname`
@@ -49,7 +45,7 @@ GINGA_FRFREAD_OBJ = ../../ginga_tools/v1.1/src/frfread.o ../../ginga_tools/v1.1/
 #        ${GINGA_TOOLS_DIR}/satpn3.o ${GINGA_TOOLS_DIR}/orbit.o ${GINGA_TOOLS_DIR}/recpol_new.o
 
 ASMTEST_OBJ = unittest.o ${SRCDIR}/fort_util.o ${SRCDIR}/err_exit.o \
-        ${SRCDIR}/asm_fits_common.o ${SRCDIR}/asm_aux.o ${SRCDIR}/asm_read_telemetry.o ${SRCDIR}/asm_fitsout.o 
+         ${SRCDIR}/asm_consts.o ${SRCDIR}/asm_fits_common.o ${SRCDIR}/asm_aux.o ${SRCDIR}/asm_read_telemetry.o ${SRCDIR}/asm_fitsout.o 
 
 ## Required to remake ./*.mod (I think)
 asmtest.o: asmtest.f90 ${ASMTEST_OBJ}
@@ -83,11 +79,6 @@ Linux:
 
 Darwin:
 	${MAKE} ${MACOPT} all
-
-#install:
-#	if [ ! -d ${INSTALL_DIR} ]; then mkdir -p ${INSTALL_DIR}; fi
-#	mv -f ${ALL} ${INSTALL_DIR}/
-#	cp -f ${ALLS} ${INSTALL_DIR}/
 
 test::
 	GINGA_CHATTER=4 ./runtest.sh

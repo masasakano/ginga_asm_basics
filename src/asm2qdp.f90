@@ -4,10 +4,8 @@ program asm2qdp
 
   use err_exit
   use fort_util
+  use asm_consts
   use asm_fits_common
-  !use asm_aux
-  !use asm_read_telemetry
-  !use asm_fitsout
   use asm_read_evt
 
   implicit none

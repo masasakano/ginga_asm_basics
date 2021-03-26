@@ -5,7 +5,8 @@
 
 目的は、GingaのTelemetry FITSを読み込み、対応する Ginga LAC FRFにある姿勢関係情報を付け加えて、ASMデータをFITS tableとして出力すること。
 
-* `asmmkevt` : 本プログラム。ASM-mode がONの時のデータのみ抽出。
+* `asmmkevt` : 本プログラム。ASM-mode がONの時のデータのみ抽出して、ASM event FITSを作成。
+* `asm2qdp` : 副プログラム。ASM event FITSから、QDP/PCO ファイルを作成。
 * `asmtelemetryout` : 副プログラム。Telemetry FITSにある全データ時間領域について、ただし、指定したパラメーターのテーブルのみ出力(パラメーターを全く与えなければ、`asmmkevt` と同様に全パラメーターが出力される)。
 
 いずれも `-h` オプションだけ与えると、ヘルプメッセージが表示される。
@@ -68,7 +69,7 @@ Frame自体は、あくまで(144 bytesではなく) 128 bytes(=ワード)とし
 ASM-modeの時のメインデータの構造は、以下に定義されている。
 
 * PHA Mode : Table 5.5.5, pp.233
-* Time Modeta: Table 5.5.6, pp.234
+* Time Mode: Table 5.5.6, pp.234
 
 -----------
 
@@ -109,7 +110,7 @@ Parameters
 * `type t_asm_colhead`: 出力FITSファイルのテーブル関係キーワードのうちで TTYPE を定義する。
   * ほとんどのTTYPEについては、対応する`COL_FORM_UNITS`のメンバー"root"(および"key")と一致する。ただし、たとえば"Euler"であれば、`COL_FORM_UNITS%root`は"Euler"であるのに対し、この変数のメンバー"type"は、"Euler1", "Euler2"など、具体的に指すもの(そしてFITS fileに出力するもの)によって変わる。
 
-したがって、将来的にたとえばSlew modeのBIT番号を変更したいなどの場合、上のtypesを変更するとよい。
+したがって、将来的にたとえば〇〇modeのBIT番号を変更したいなどの場合、上のtypesを変更するとよい。
 
 他の主要type-s (特に読み込んだり計算したデータを保持するもの)
 ========
@@ -132,9 +133,9 @@ Parameters
 アルゴリズム
 ======
 
-1. 主プログラム(`asmmkevt.f90`, `asmtelemetryout.f90`)
+1. 主プログラム(`asmmkevt.f90`, `asmtelemetryout.f90`, `asm2qdp.f90`)
    * コマンドライン引数の処理、出力FITSファイルのopen/closeが主な仕事
-   * その間に、大雑把に言って以下の二つのmodulesで定義された関数やサブルーチンを呼ぶ。
+   * その間に、(`asm2qdp.f90`を除き)大雑把に言って以下の二つのmodulesで定義された関数やサブルーチンを呼ぶ。
 2. Module `asm_read_telemetry.f90`: Telemetry FITS と FRF FITSの読み込み
    * 読み込んだデータをそれぞれ `trows` (type `asm_telem_row`) と `frfrows` (type `asm_frfrow`)にセットして返す。
      * それぞれのFITS headersも返す。
@@ -149,8 +150,11 @@ Parameters
      * `asmmkevt.f90` の場合は、単純に `COL_FORM_UNITS`にあるものを(ほぼ?)すべて出力するように、`type(t_asm_colhead)`を作ってこのmoduleに与える。
      * `asmtelemetryout.f90` の場合は、与えられたコマンドライン引数に応じて出力するコラムを選んで`type(t_asm_colhead)`を作ってこのmoduleに与える。
 4. Module `asm_fits_common.f90`: 上の二つのmodulesの事実上の親となるmodule。基本的なルーチンや共通ルーチンはこちらに定義されている。
+   * 最も基本的な定数は、``asm_consts.f90` にていぎされている。
    * その中で、`get_index()` (とそのラッパーである`get_element()`)は、変数を抽象化して、Ruby/PerlのHash (PythonのDictionary)のように扱うためのinterface。実は、Fortran 2008 (gfortranではすでに対応済み)では、組込関数 `FINDLOC()`として似たような機能が実装されていたことをあとになって知った。
-5. その他のユーティリティModules
+5. Module `asm_read_evt.f90`: `asm2qdp.f90` の核となるModule。
+   * ASM event file の読み込みと、QDP/PCO filesの書き出し。
+6. その他のユーティリティModules
    * `asm_aux.f90`: Auxiliary functions/subroutines specific in this package (NOT Fortran-generic utility).
    * `err_exit.f90`: Error handling routines.
    * `fort_util.f90`: General Fortran90 utility routines.
@@ -167,6 +171,8 @@ FormatはASTRO-C(Ginga)中間報告書 Table 5.1.3, pp.201。端的には上位2
 Frame番号は、各SFにつき、0〜63まで順番に回っていく。SF番号は、0〜3で回っていく……が、たまに不連続になったりあるいは同じSF番号が異なるはずのSFで連続するケースが認められた(bitrate が変化した時らしい)。
 
 FRF においてつけられる、SF番号は、Telemetry FITSの(Frame番号から推測した)SFの通し番号と一致するように見える。たとえば、FRFの方で途中の(ある時間帯の)データに欠落があっても、その時間帯の後のデータでは、SFの通し番号がTelemetry FITSから予想される番号と一致する。がただし、FRFの方がSFsの数がずっと多いケースもあった。
+
+Telemetryにおいては、framesは、基本的に欠落なく、各SFごとに64 framesあるはずながら、保証はされていない。特に(storedではなく)リアルデータの場合、欠落があり得る。もっともありがちな欠落のタイミングは、データの初め、終わり、および中間の(地上の受信)アンテナ反転の時。
 
 ## FRFとのマッチング ##
 
