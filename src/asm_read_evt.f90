@@ -32,7 +32,6 @@ contains
     ! integer(kind=ip2) :: nullval  ! if 0, null value is not considered.
     logical :: anyf
     integer :: status, colnum, ich, idet
-    integer(kind=ip2) :: statusi2
     character(len=30) :: errtext
 
     do idet=1, NUM_INSTR
@@ -40,6 +39,7 @@ contains
       do ich=chan_l_h(1), chan_l_h(2)
         colnum = (idet-1)*NCHANS_PHA + ich + 1   ! NCHANS_PHA defined in asm_fits_common
         tmpchs = 0_ip2
+        status = 0  ! NOTE: Even if one of FTCGVI fails, the next one is attempted from scratch.
         ! FiTs_GeT_Column_Value: FTGCV[SBIJKEDCM](unit,colnum,frow,felem,nelements,nullval, >values,anyf,status)
         !  anyf is True if any of the values is undefined.
         call FTGCVI(funit, colnum, 1, 1, nrows, 0, tmpchs, anyf, status)
@@ -52,11 +52,12 @@ contains
           !! ------------ Comment ------------
           !! Rerun FTGCVI() with INTEGER*2 status, and it may work if GINGA_DEBUG=1
           !! There is no reason this works, when the others do not, but it seemed to do so in some cases (in the past?)!
-          call FTGCVI(funit, colnum, 1, 1, nrows, 0, tmpchs, anyf, statusi2)
-          if (statusi2 .ne. 0) then
-            call FTGERR(int(statusi2), errtext)
+          status = 0  ! status is reset to 0 so this attempt may succeed.
+          call FTGCVI(funit, colnum, 1, 1, nrows, 0, tmpchs, anyf, status)
+          if (status .ne. 0) then
+            call FTGERR(int(status), errtext)
             write(stderr,'("ERROR: (",A,") Failed(2) in FTGCVI() with Status=",A," (",A,"): colnum=",A)') &
-               Subname, trim(ladjusted_int(int(statusi2))), trim(errtext), trim(ladjusted_int(colnum))
+               Subname, trim(ladjusted_int(int(status))), trim(errtext), trim(ladjusted_int(colnum))
           end if
         else
           !if (IS_DEBUG()) write(stderr,'("NOTE: Success in FTGCVI()")')
@@ -89,6 +90,7 @@ contains
     logical :: success_ftgiou
 
     success_ftgiou = .true.
+    status = 0
     call FTGIOU(funit, status)
     if (status .ne. 0) then
       call FTGERR(status, errtext)
@@ -105,6 +107,7 @@ contains
         !success_ftgiou = .false.
       end if
     end if
+    status = 0
     call FTOPEN(funit, trim(fname), 0, blocksize, status)  ! 0: readonly
     call err_exit_if_status(status, 'Failed to open the FITS to read: '//trim(fname))
 
@@ -150,6 +153,7 @@ contains
 
     call FTCLOS(funit, status)
     call err_exit_if_status(status, 'Failed to close the FITS: '//trim(fname))
+    status = 0
     if (success_ftgiou) call FTFIOU(funit, status)
 
   end subroutine asm_time_row_det_band
@@ -157,7 +161,7 @@ contains
   !------------------------------------------------------------
   ! Write QDP/PCO
   !------------------------------------------------------------
-  subroutine write_qdp(fname, outroot, chans, artime, outchans, status)
+  subroutine write_qdp(fname, outroot, chans, artime, outchans)
     implicit none
     integer, parameter :: MY_FUNIT = 62  ! arbitrary
     character(len=*), parameter :: Fmt_MJD = 'E20.14'
@@ -167,7 +171,7 @@ contains
     integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band) ! for displaying purpose only
     real(dp8), dimension(:), intent(in) :: artime
     integer(kind=ip2), dimension(:,:,:), intent(in) :: outchans ! (Row(channel-values), Detector(6), Band(Low(1)/High(2)))
-    integer, intent(out), optional :: status
+    integer :: status ! IOSTAT of open()
     real(dp8) :: mjd_offset = UNDEF_DOUBLE  ! All Time is offset with this MJD value (n.b., the value of the first row is 0).
     character(len=2048) :: qdpfile, pcofile
     integer :: iy, idet, irow, iband, statustmp
@@ -187,6 +191,7 @@ contains
       end if
     end do
 
+    status = 0
     success_ftgiou = .true.
     call FTGIOU(unit, status) ! Just get a safe IO unit
     if ((status .ne. 0) .and. ((unit > 999) .or. (unit < 9))) then
@@ -257,12 +262,11 @@ contains
     implicit none
     character(len=*), intent(in) :: fname, outroot  ! fname for ASM.fits
     integer, dimension(:,:), intent(in) :: chans  ! ((Low,High), i-th-band)
-    integer :: status
     real(kind=dp8), dimension(:), allocatable :: artime
     integer(kind=ip2), dimension(:,:,:), allocatable :: outchans
 
     call asm_time_row_det_band(fname, chans, artime, outchans)
-    call write_qdp(fname, outroot, chans, artime, outchans, status)
+    call write_qdp(fname, outroot, chans, artime, outchans)
 
     if (allocated(artime)) deallocate(artime)
     if (allocated(outchans)) deallocate(outchans)

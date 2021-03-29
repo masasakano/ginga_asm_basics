@@ -484,12 +484,11 @@ contains
   !------------------------------------------------------------
   ! Returns merged FITS header from Telemetry and FRF
   !------------------------------------------------------------
-  function get_asm_fits_header(tfhead, frfhead, trows, relrows, status, creator) result(rethead)
+  function get_asm_fits_header(tfhead, frfhead, trows, relrows, creator) result(rethead)
     type(fits_header), intent(in) :: tfhead, frfhead
     type(asm_telem_row), dimension(:), intent(in) :: trows
     !type(asm_frfrow), dimension(:), intent(in) :: frfrows
     type(asm_sfrow), dimension(:), intent(in) :: relrows
-    integer, intent(out) :: status
     character(len=*), intent(in), optional :: creator  ! e.g., asmmkevt ver.2021-03-31
     type(fits_header) :: rethead
 
@@ -633,7 +632,7 @@ contains
     character(len=*), parameter :: Subname = 'write_asm_fits_header'
     integer, intent(in) :: unit
     type(fits_header), intent(in) :: fhd
-    integer, intent(out) :: status
+    integer, intent(inout) :: status
     character(len=*), intent(in), optional :: comname  ! Command name
     character(len=*), dimension(:), intent(in), optional :: args  ! command-line Arguments
     logical, intent(in), optional :: primary  ! if .true., it is for Primary header.
@@ -727,6 +726,7 @@ contains
     call FTPKYJ(unit, fhd%EFLAGS_E%name, fhd%EFLAGS_E%val, fhd%EFLAGS_E%comment, status)
     call FTPKYS(unit, fhd%DATE%name, fhd%DATE%val, fhd%DATE%comment, status)
 
+    ! FiTs-Put-COMment
     call FTPCOM(unit, OUTFTCOMMENT1, status)  ! defined in asm_fits_common
     call FTPCOM(unit, OUTFTCOMMENT2, status)  ! defined in asm_fits_common
 
@@ -735,6 +735,7 @@ contains
       do i=1, size(args)
         strarg = trim(strarg) // ' ' // trim(args(i))
       end do
+      ! FiTs-Put-HIStory
       call FTPHIS(unit, strarg, status)
     end if
   end subroutine write_asm_fits_header
@@ -765,7 +766,7 @@ contains
     !type(asm_frfrow), dimension(:), intent(in) :: frfrows
     type(asm_sfrow), dimension(:), intent(in) :: relrows
     type(t_asm_colhead), dimension(:), allocatable, intent(in) :: colheads
-    integer, intent(out) :: status
+    integer, intent(inout) :: status
     integer :: i, ikind, ittype, iprm, itrow, iframe, irelrow, iout, iend, iasm, naxis2, ntrows, nrelrows, kval
     character(len=30) :: errtext ! for FITS error to receive
     character(len=1024) :: usermsg  ! for humans
@@ -788,8 +789,8 @@ contains
     allocate(cols8(naxis2))
 
     !FTPCL[SLBIJKEDCM](unit,colnum,frow,felem,nelements,values, > status) ! frow: 1st row?, felem: 1st element?
-    status = 0 
-    iframe = 0 
+    !status = 0
+    iframe = 0
     ittype = 0  ! TTYPEn
     iasm = 0    ! The i-th number of the main ASM data (should be repeated NWORDS_MAIN=96 times)
     ! do ikind=1, size(COL_FORM_UNITS)
@@ -1095,8 +1096,6 @@ contains
     real(kind=dp8), dimension(2) :: dvalues = (/ 12345.6, 7.89 /), d2values = (/ 0.023, 0.0045 /)
     character(len=20), dimension(2) :: svalues = (/ 'saisho', 'tsugi1' /)
 
-    status=0
-
     if (present(outcolkeys)) then
       colheads = get_colheads(outcolkeys)
     else
@@ -1105,6 +1104,7 @@ contains
     end if
 
     ! Get an unused Logical Unit Number to use to create the FITS file
+    status=0
     call ftgiou(unit,status)
     if ((status .ne. 0) .and. ((unit > 999) .or. (unit < 9))) then
       write(stderr,'("WARNING: Failed in ftgiou(): unit = ",I12,". Manually reset to ",I3)') unit, MY_FUNIT
@@ -1127,6 +1127,7 @@ contains
 
     ! write the required (Primary) header keywords
     call ftphpr(unit, simple, bitpix, 0, naxes, 0, 1, extend, status) ! Because naxis=0, naxes is ignored.
+    
     ! write other optional keywords to the header
     call write_asm_fits_header(unit, fhead, status, primary=.true.)
     
@@ -1220,6 +1221,8 @@ contains
     logical :: simple =.true., extend = .true.
     integer :: nhdu
     character(len=30) :: errtext
+
+    status = 0
     call ftgiou(unit, status)
 !if (IS_DEBUG()) print *,'DEBUG:041:giou, unit=', unit, ' status=',status
 if ((status .ne. 0) .and. ((unit > 999) .or. (unit < 9))) unit = MY_FUNIT

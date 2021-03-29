@@ -12,7 +12,6 @@ program asmtelemetryout
 
   implicit none
 
-!integer, parameter :: dp = kind(1.d0) ! defined in asm_fits_common
   character(len=*), parameter :: Subname = 'main'
 
   integer :: i, j, n_mainargs, istart_main
@@ -21,7 +20,6 @@ program asmtelemetryout
   logical :: torf
 
   type(fits_header) :: tfhead, outhead
-  !integer(kind=1), dimension(:, :), allocatable :: headers, telems !  (word, row)
   type(asm_telem_row), dimension(:), allocatable :: trows
 
   type(fits_header) :: frfhead
@@ -29,21 +27,16 @@ program asmtelemetryout
   type(asm_sfrow), dimension(:), allocatable :: relrows
 
   character(len=1024) :: arg, comname
-  type(t_argv), dimension(:), allocatable :: allargv
-  !type(t_argv), dimension(3) :: argv
   !argv = [t_argv(key='telemetry'), t_argv(key='FRF'), t_argv(key='outfile')] 
+  type(t_argv), dimension(:), allocatable :: allargv
 
-  !! USAGE: ./asmtelemetryout ../samples/ginga_sirius_P198804280220.fits ../samples/FR880428.S0220.fits ../../../ginga_samples/mkevt_out_test.fits
+  !! USAGE: ./asmtelemetryout ../samples/ginga_sirius_P198804280220.fits.gz ../samples/FR880428.S0220.fits.gz ../../../ginga_samples/asmtelemetryout_test.fits
 
   !-- Handle the command-line arguments.
 
 if (IS_DEBUG()) print *,'DEBUG:002: command_argument_count()=',command_argument_count()
   allocate(allargv(command_argument_count()))  ! F2003 standard  (_excluding_ $0)
 if (IS_DEBUG()) print *,'DEBUG:003: size(allargv)=',size(allargv)
-  !allargv(2:4) = [t_argv(key='telemetry'), t_argv(key='FRF'), t_argv(key='outfile')]
-  !allargv(2) = t_argv(key='telemetry')
-  !allargv(3) = t_argv(key='FRF')
-  !allargv(4) = t_argv(key='outfile')
 
   i = -1  ! i=0 is for $0 (index for all the original ARGV)
   istart_main = -1  ! Index where the main arugment starts.
@@ -108,7 +101,7 @@ if (IS_DEBUG()) print *,'DEBUG:024: istart_main=',istart_main, ' n_mainargs=',n_
   call update_asm_sfrow_modes(trows, relrows, skip_validate=.true.) ! skip_validate: Major difference from asmmkevt.f90
 
   !outhead = get_merged_head(tfhead, frfhead)
-  outhead = get_asm_fits_header(tfhead, frfhead, trows, relrows, status)
+  outhead = get_asm_fits_header(tfhead, frfhead, trows, relrows)
 
   if (n_mainargs == 3) then
     call write_asm_evt_fits(get_val_from_key('outfile', allargv), outhead, trows, relrows, status &
@@ -125,6 +118,9 @@ end if
   call print_proc_stats(trows, relrows, frfrows)
 
   if (allocated(allargv)) deallocate(allargv)
+  if (allocated(trows))   deallocate(trows)
+  if (allocated(frfrows)) deallocate(frfrows)
+  if (allocated(relrows)) deallocate(relrows)
 end program asmtelemetryout
 
 

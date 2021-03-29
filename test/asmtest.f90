@@ -81,7 +81,6 @@ contains
     logical, dimension(TOT_NTESTS) :: ress
     ! logical, external :: btest_int4_as_1byte
 
-    integer :: status=-999
     integer :: j
 
     ret_status = 0  ! normal ends (n.b., returned value)
@@ -208,7 +207,6 @@ contains
     !type(t_form_unit) :: tmpfu
     type(t_asm_colhead), dimension(:), allocatable :: colheads, colheads2
 
-    integer :: status=-999
     integer :: j, exq1
 
     ret_status = 0  ! normal ends (n.b., returned value)
@@ -264,7 +262,6 @@ contains
     integer, dimension(TOT_NTESTS, 2) :: col_exps
 
     logical :: res
-    integer :: status=-999
     integer :: j, k
 
     ret_status = 0  ! normal ends (n.b., returned value)
@@ -298,7 +295,6 @@ contains
     integer, dimension(TOT_NTESTS, 3) :: col_exps
 
     logical :: res
-    integer :: status=-999
     integer :: j, iasm, itel
 
     ret_status = 0  ! normal ends (n.b., returned value)
@@ -332,7 +328,6 @@ contains
     type(t_form_unit) :: tmpfu
     type(t_asm_colhead), dimension(:), allocatable :: colheads
 
-    integer :: status=-999
     integer :: j
 
     ret_status = 0  ! normal ends (n.b., returned value)

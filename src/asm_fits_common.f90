@@ -7,7 +7,7 @@ module asm_fits_common
   use asm_consts
   implicit none 
 
-  character(len=*), parameter, public :: ASM_BASICS_VERSION = '2021-03-26'
+  character(len=*), parameter, public :: ASM_BASICS_VERSION = '2021-03-29'
   integer, parameter :: SIZE_EMPTY_FITS_BYTES = 40320
   ! This value would change as soon as a FITS header keyword
   ! or table column is deleted or a new one is added in the output FITS by this package.
@@ -936,7 +936,7 @@ contains
     integer, intent(in) :: unit
     integer, intent(in) :: ittype  ! TTYPEn number
     character(len=*), intent(in) :: ckey
-    integer, intent(out) :: status
+    integer, intent(inout) :: status
 
     type(t_form_unit) :: colprm
 

@@ -24,10 +24,12 @@ contains
       mydefunit = 156
     end if
 
+    status = 0
     funit = 0
     do i=1, 100
       call ftgiou(funit, status)
       if (status == 0) then
+        return
         exit
       else
         ! It seems status is never zero... But if I just accept it, it does not seem to cause a problem.
@@ -103,6 +105,7 @@ contains
     funit = get_safe_unit(defunit=MY_FUNIT)
 
     ! Open and move to the 1st extension
+    status = 0
     call ftopen(funit, fname, 0, blocksize, status)  ! 0: readonly
     call err_exit_if_status(status, 'Failed to open the FITS: '//trim(fname))
     call FTMAHD(funit, 2, hdutype, status)           ! Move to the 1st extention
@@ -164,6 +167,7 @@ contains
     funit = get_safe_unit(defunit=MY_FUNIT)
 
     ! Open and move to the 1st extension
+    status = 0
     call ftopen(funit, fname, 0, blocksize, status)  ! 0: readonly
     call err_exit_if_status(status, 'Failed to open the FITS: '//trim(fname))
     call FTMAHD(funit, 2, hdutype, status)           ! Move to the 1st extention
@@ -440,6 +444,7 @@ contains
     funit = get_safe_unit(MY_FUNIT)
 
     call OPNFRF(funit, fname, cond)
+    status = 0
     ! FiTs_Get_Number_of_RoWs
     call FTGNRW(funit, nrows, status) ! cf. FTGNRWLL() for INT*64
 
@@ -500,6 +505,7 @@ contains
     end do
 
     call CLSFRF(cond)
+    status = 0
     call ftfiou(funit, status)
   end function get_frf_types
 

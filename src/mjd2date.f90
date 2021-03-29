@@ -88,15 +88,6 @@ program mjd2date
     end select
   end do
 
-!  if (istart_main == -1) then
-!    n_mainargs = size(allargv)
-!  else
-!    n_mainargs = size(allargv) - istart_main + 1
-!  end if
-!  if (n_mainargs < 3) call err_exit_with_msg( &
-!     'The number of the main arguments must be at least 3, but given only '//trim(ladjusted_int(n_mainargs)))
-!if (IS_DEBUG()) print *,'DEBUG:024: istart_main=',istart_main, ' n_mainargs=',n_mainargs
-
   if (is_verbose) call dump_all_argv(allargv) ! Verbose information
 
   call MJDATE(mjd, times)  ! in mjd.f in ginga_tools
